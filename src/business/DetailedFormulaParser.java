@@ -11,6 +11,15 @@ import java.util.regex.Pattern;
  * Format: der(chr)(segment1::segment2::segment3)
  * Example: der(13)(13pter->13q10::15q10->15q21::13q14->13qter)
  *
+ * Supported edge cases:
+ * - Standard derivatives: der(13)(...)
+ * - Dicentric chromosomes: der(13;15)(...)
+ * - Ring chromosomes: der(7)(::7q11->7q31::)
+ * - HSR regions: der(8)(...::hsr::...)
+ * - Multiple fragments from same chromosome
+ * - Telomere markers: pter, qter
+ * - Sub-band precision: 15q21.1, 15q21.2, etc.
+ *
  * @author ilariamt
  * Date: January 02, 2026
  */
@@ -50,14 +59,24 @@ public class DetailedFormulaParser {
         Matcher derMatcher = derPattern.matcher(input);
 
         while (derMatcher.find()) {
-            String baseChr = derMatcher.group(1);
+            String baseChrSpec = derMatcher.group(1);
             String detailedFormula = derMatcher.group(2);
 
             // Add to detailed system
-            derDetailedSystem.add("der(" + baseChr + ")(" + detailedFormula + ")");
+            derDetailedSystem.add("der(" + baseChrSpec + ")(" + detailedFormula + ")");
 
-            // Parse the formula and extract LGF
-            parseDetailedSegments(detailedFormula, baseChr, b.getKaryotypeLGF());
+            // Parse base chromosome(s)
+            // Can be single chr: der(13) or dicentric: der(13;15)
+            String[] baseChrs = baseChrSpec.split(";");
+
+            if (baseChrs.length == 1) {
+                // Standard derivative with single base chromosome
+                parseDetailedSegments(detailedFormula, baseChrs[0].trim(), b.getKaryotypeLGF());
+            } else {
+                // Dicentric: multiple base chromosomes
+                // Each base chromosome gets loss detection
+                parseDetailedSegmentsDicentric(detailedFormula, baseChrs, b.getKaryotypeLGF());
+            }
         }
 
         return b;
@@ -66,21 +85,43 @@ public class DetailedFormulaParser {
     /**
      * Parse detailed segments and compute LGF
      * Format: 13pter->13q10::15q10->15q21::13q14->13qter
+     *
+     * Handles edge cases:
+     * - Ring chromosomes: ::segment::
+     * - HSR regions: ...::hsr::...
+     * - Isochromosomes: i(13)(q10) in detailed formulas
+     * - Multiple fragments from same chromosome
      */
     private void parseDetailedSegments(String formula, String baseChr, List<List<Integer>> karyotypeLGF) {
         List<Integer> karyotypeLossOutcome = karyotypeLGF.get(0);
         List<Integer> karyotypeGainOutcome = karyotypeLGF.get(1);
         List<Integer> karyotypeFusionOutcome = karyotypeLGF.get(2);
 
+        // Check for ring chromosome (starts and ends with ::)
+        boolean isRing = formula.startsWith("::") && formula.endsWith("::");
+
+        // Remove leading/trailing :: for ring chromosomes
+        String cleanedFormula = formula;
+        if (isRing) {
+            cleanedFormula = formula.substring(2, formula.length() - 2);
+        }
+
         // Split by fusion points (::)
-        String[] segments = formula.split("::");
+        String[] segments = cleanedFormula.split("::");
 
         for (String segment : segments) {
             segment = segment.trim();
 
-            // Handle special cases: single point or ring
-            if (segment.startsWith("::") || segment.endsWith("::")) {
-                continue; // Ring chromosome marker
+            // Skip empty segments
+            if (segment.isEmpty()) {
+                continue;
+            }
+
+            // Handle HSR (homogeneously staining region)
+            if (segment.equals("hsr") || segment.equalsIgnoreCase("hsr")) {
+                // HSR is a special marker, mark as fusion but don't process as gain/loss
+                // It represents amplified material, but we don't know the exact bands
+                continue;
             }
 
             // Parse segment: "13pter->13q10" or "15q10->15q21"
@@ -103,16 +144,93 @@ public class DetailedFormulaParser {
                     recordSegmentGain(karyotypeGainOutcome, karyotypeFusionOutcome, startPoint, endPoint);
                 }
             } else if (parts.length == 1) {
-                // Single point (e.g., "hsr" or standalone breakpoint)
+                // Single point (standalone breakpoint)
                 String point = parts[0].trim();
-                if (!point.isEmpty()) {
+                if (!point.isEmpty() && !point.equals("hsr")) {
                     markFusionPoint(karyotypeFusionOutcome, point);
                 }
             }
         }
 
         // Detect losses: any part of base chromosome NOT in the formula
-        detectLosses(formula, baseChr, karyotypeLossOutcome);
+        // For ring chromosomes, losses are calculated the same way
+        detectLosses(cleanedFormula, baseChr, karyotypeLossOutcome, isRing);
+    }
+
+    /**
+     * Parse detailed segments for dicentric chromosomes
+     * Format: der(13;15)(13pter->13q10::15q10->15q21)
+     *
+     * Dicentric handling:
+     * - Multiple base chromosomes (e.g., 13 and 15 in der(13;15))
+     * - Losses are reported on ALL base chromosomes
+     * - Material from non-base chromosomes is still gained
+     */
+    private void parseDetailedSegmentsDicentric(String formula, String[] baseChrs, List<List<Integer>> karyotypeLGF) {
+        List<Integer> karyotypeLossOutcome = karyotypeLGF.get(0);
+        List<Integer> karyotypeGainOutcome = karyotypeLGF.get(1);
+        List<Integer> karyotypeFusionOutcome = karyotypeLGF.get(2);
+
+        // Check for ring chromosome
+        boolean isRing = formula.startsWith("::") && formula.endsWith("::");
+        String cleanedFormula = formula;
+        if (isRing) {
+            cleanedFormula = formula.substring(2, formula.length() - 2);
+        }
+
+        // Trim all base chromosomes
+        for (int i = 0; i < baseChrs.length; i++) {
+            baseChrs[i] = baseChrs[i].trim();
+        }
+
+        // Split by fusion points (::)
+        String[] segments = cleanedFormula.split("::");
+
+        for (String segment : segments) {
+            segment = segment.trim();
+
+            // Skip empty segments or HSR
+            if (segment.isEmpty() || segment.equalsIgnoreCase("hsr")) {
+                continue;
+            }
+
+            // Parse segment
+            String[] parts = segment.split("->");
+
+            if (parts.length == 2) {
+                String startPoint = parts[0].trim();
+                String endPoint = parts[1].trim();
+                String segmentChr = extractChr(startPoint);
+
+                // Check if this segment is from one of the base chromosomes
+                boolean isFromBaseChr = false;
+                for (String baseChr : baseChrs) {
+                    if (segmentChr.equals(baseChr)) {
+                        isFromBaseChr = true;
+                        break;
+                    }
+                }
+
+                if (isFromBaseChr) {
+                    // Segment from one of the base chromosomes - mark fusion only
+                    markFusionPoint(karyotypeFusionOutcome, startPoint);
+                    markFusionPoint(karyotypeFusionOutcome, endPoint);
+                } else {
+                    // Segment from a different chromosome - this is a GAIN
+                    recordSegmentGain(karyotypeGainOutcome, karyotypeFusionOutcome, startPoint, endPoint);
+                }
+            } else if (parts.length == 1) {
+                String point = parts[0].trim();
+                if (!point.isEmpty() && !point.equals("hsr")) {
+                    markFusionPoint(karyotypeFusionOutcome, point);
+                }
+            }
+        }
+
+        // Detect losses for EACH base chromosome
+        for (String baseChr : baseChrs) {
+            detectLosses(cleanedFormula, baseChr, karyotypeLossOutcome, isRing);
+        }
     }
 
     /**
@@ -189,8 +307,12 @@ public class DetailedFormulaParser {
      * - Segments from chr 13: [13pter->13q10, 13q14->13qter]
      * - Gap: 13q10 to 13q14
      * - Loss: all bands between 13q10 and 13q14
+     *
+     * Ring chromosome handling:
+     * - For rings (::segment::), losses are still calculated normally
+     * - The ring structure doesn't change what material is missing
      */
-    private void detectLosses(String formula, String baseChr, List<Integer> karyotypeLossOutcome) {
+    private void detectLosses(String formula, String baseChr, List<Integer> karyotypeLossOutcome, boolean isRing) {
         // Step 1: Extract all segments from baseChr
         List<Segment> baseSegments = new ArrayList<>();
 
