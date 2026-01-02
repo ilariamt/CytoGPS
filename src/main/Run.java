@@ -15,34 +15,46 @@ import toolkit.SummaryStatisticsForBatchFile;
  * Washington University School of Medicine in St. Louis
  * 
  * Date: August 30, 2021 
+ * 
+ * Modified by ilariamt
+ * Date: November 21, 2025 
  */
 public class Run {
 
-	public static void main(String[] args) {
-		// TODO Auto-generated method stub
-		
-		try {
-			System.out.println(LocalDateTime.now());
-	        System.out.println("Start");
-	        // The "[path_to_the_karyotype_input_file]" is where your karyotypes input is saved, e.g. "C:\\Karyotype_samples.txt"
-	        // The "[path_to_the_output_JSON_file]" is where you want to save the JSON output, e.g. "C:\\Karyotype_samples.json" 
-		    // The "[path_to_the_output_aggregate_LGF_csv_file]" is where you want to save the aggregate LGF output, e.g. "C:\\Karyotype_samples.csv" 
-		    // The "[path_to_the_output_summary_statistics_csv_file]" is where you want to save the summary statistics output, e.g. "C:\\Karyotype_samples_SummaryStatistics.csv" 
-			AggregateJsonForBatchFile.generateJson(Paths.get("[path_to_the_karyotype_input_file]"), Paths.get("[path_to_the_output_JSON_file]"));
-			AggregateCsvForBatchFile.generateAggregateLGF(Paths.get("[path_to_the_karyotype_input_file]"), Paths.get("[path_to_the_output_aggregate_LGF_csv_file]"));
-	        SummaryStatisticsForBatchFile.writeSummaryStatistics(Paths.get("[path_to_the_karyotype_input_file]"), Paths.get("[path_to_the_output_summary_statistics_csv_file]"));
-	        System.out.println(LocalDateTime.now());
-    		System.out.println("Complete");
-		} catch (Exception e) {
-			e.printStackTrace(); 
-			System.out.println(LocalDateTime.now());
-    		System.out.println("Incomplete");
-		}
-		
-			
-	}
-	
-	
-	
-
+    public static void main(String[] args) {
+        // TODO Auto-generated method stub
+        
+        try {
+            System.out.println(LocalDateTime.now());
+            System.out.println("Start");
+            
+            // Check if a folder path argument is provided
+            if (args.length != 1) {
+            	System.out.println("ERROR: Please provide the folder path as the only argument.");
+            	System.out.println("Example:");
+            	System.out.println("  java -jar karyotype.jar /path/to/data/");
+            	System.exit(1);
+            }
+            
+            // Get the base folder path from the command-line argument
+            java.nio.file.Path basePath = Paths.get(args[0]);
+            
+            // Resolve input and output file paths relative to the base path
+            java.nio.file.Path inputFile = basePath.resolve("cytogps_input.txt");
+            java.nio.file.Path outputJson = basePath.resolve("cytogps_output.json");
+            java.nio.file.Path outputCsv = basePath.resolve("cytogps_output.csv");
+            java.nio.file.Path outputStats = basePath.resolve("cytogps_stats_output.csv");
+            
+            AggregateJsonForBatchFile.generateJson(inputFile, outputJson);
+            AggregateCsvForBatchFile.generateAggregateLGF(inputFile, outputCsv);
+            SummaryStatisticsForBatchFile.writeSummaryStatistics(inputFile, outputStats);
+            
+            System.out.println(LocalDateTime.now());
+            System.out.println("Complete");
+        } catch (Exception e) {
+            e.printStackTrace(); 
+            System.out.println(LocalDateTime.now());
+            System.out.println("Incomplete");
+        }
+    }
 }
