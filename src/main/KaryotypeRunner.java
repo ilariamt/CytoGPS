@@ -34,6 +34,19 @@ public class KaryotypeRunner {
 	public static FinalResult getFinalResult(String input){
 		FinalResult finalResult = new FinalResult();
 		String inputNoSpace = input.replaceAll("\\s","");
+	    
+		// NEW: Check if detailed formula
+		if (DetailedFormulaParser.isDetailedFormula(inputNoSpace)) {
+			// Route to detailed formula parser
+			DetailedFormulaParser detailedParser = new DetailedFormulaParser();
+			BiologicalOutcome b = detailedParser.parseDetailedFormula(inputNoSpace);
+
+			finalResult.getBiologicalOutcomeList().add(b);
+			finalResult.getBiologicalInterpretationList().add(
+				BiologicalOutcome.getBiologicalInterpretation(b)
+			);
+			return finalResult;
+		}
 
 		// Preprocess to handle '?' symbols
 		// Detect if input contains '?' and strip it for parsing
@@ -42,7 +55,7 @@ public class KaryotypeRunner {
 			inputNoSpace = inputNoSpace.replaceAll("\\?", "");
 			// Note: This loses information about WHERE the '?' was located --> so if there was a cytoband after '?' it is taken as certain, but if not, it is treates as uncertain
 		}
-
+		// Continues with normal ANTLR parsing:
 		try {
 			KaryotypeLexer lexer = new KaryotypeLexer(CharStreams.fromString(inputNoSpace));
 			lexer.removeErrorListeners();
