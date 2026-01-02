@@ -298,6 +298,7 @@ public class ParseEvent {
 	            		processDel(karyotypeLossOutcome, karyotypeFusionOutcome, breakpointsFullName);
 	            		break;
 	            	}
+					// simple DIC case (not der( dic ))
 	            	case "dic": {
 	            		processLossFusionEvent(karyotypeLossOutcome, karyotypeFusionOutcome, breakpointsFullName);
 	            		break;
@@ -320,7 +321,7 @@ public class ParseEvent {
 	            	}
 	            	case "hsr": {
 	            		processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
-	            		processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
+	            		// processFusionEvent(karyotypeFusionOutcome, breakpointsFullName); //called twice?
 	            		break;
 	            	}
 	            	case "ins": {
@@ -338,7 +339,7 @@ public class ParseEvent {
 	            	}
 	            	case "inv": {
 	            		processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
-	            		processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
+	            		// processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
 	            		break;
 	            	}
 	            	case "i": {
@@ -388,6 +389,7 @@ public class ParseEvent {
         					
         				} else {		
         					
+							//Complex der DIC cases → calls validation classes that compute fusion internally, never calling processLossFusionEvent()
         					DerivativeValidationOutcome d;
         					if (e.getBreakpoints().size() == 0) {
         						if (!chrList.get(0).equals(chrList.get(1))) {
@@ -510,7 +512,7 @@ public class ParseEvent {
     private void processIdic(List<Integer> karyotypeLossOutcome, List<Integer> karyotypeGainOutcome, List<Integer> karyotypeFusionOutcome, List<List<String>> breakpointsFullName) {    	
 		String chrBreakpoint = breakpointsFullName.get(0).get(0);
 		markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint);
-		markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint);
+		// markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint);
 		String ter = getChrTer(getChrArm(chrBreakpoint));
 		int endLossIndex = chrToIndexMap.get(ter);
 		int beginLossIndex = getBeginIndex(chrBreakpoint);		
@@ -532,17 +534,18 @@ public class ParseEvent {
     }
     
     private void processDup(List<Integer> karyotypeGainOutcome, List<Integer> karyotypeFusionOutcome, List<List<String>> breakpointsFullName) {
-    	processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
+    	processFusionEvent(karyotypeFusionOutcome, breakpointsFullName); // first mark
     	List<String> chrBreakpoints = breakpointsFullName.get(0);	
-    	String chrBreakpoint0 = chrBreakpoints.get(0);
-    	String chrBreakpoint1 = chrBreakpoints.get(1);
-    	if (chrBreakpoint0.equals(chrBreakpoint1)) {
-    		markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint0);
-    	}
-    	if (chrBreakpoint0.compareTo(chrBreakpoint1) > 0) {
-    		markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint0);
-    		markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint0);
-    	}
+		// REMOVED: (marks the breakpoint again)
+    	// String chrBreakpoint0 = chrBreakpoints.get(0);
+    	// String chrBreakpoint1 = chrBreakpoints.get(1);
+    	// if (chrBreakpoint0.equals(chrBreakpoint1)) {
+    	// 	markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint0); // second mark
+    	// }
+    	// if (chrBreakpoint0.compareTo(chrBreakpoint1) > 0) {
+    	// 	markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint0);
+    	// 	markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint0);
+    	// }
     	
 		String beginBand = getMin(chrBreakpoints);
 		String endBand = getMax(chrBreakpoints);							
@@ -555,7 +558,7 @@ public class ParseEvent {
     
     private void processTrp(List<Integer> karyotypeGainOutcome, List<Integer> karyotypeFusionOutcome, List<List<String>> breakpointsFullName) {
     	processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
-    	processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
+    	// processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
     	List<String> chrBreakpoints = breakpointsFullName.get(0);	
     	
 		String beginBand = getMin(chrBreakpoints);
@@ -569,7 +572,7 @@ public class ParseEvent {
     
     private void processQdp(List<Integer> karyotypeGainOutcome, List<Integer> karyotypeFusionOutcome, List<List<String>> breakpointsFullName) {
     	processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
-    	processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
+    	// processFusionEvent(karyotypeFusionOutcome, breakpointsFullName);
     	List<String> chrBreakpoints = breakpointsFullName.get(0);	
     	if (chrBreakpoints.get(0).equals(chrBreakpoints.get(1))) {
     		markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoints.get(0));
@@ -615,8 +618,8 @@ public class ParseEvent {
 					String oppCen = oppChrArm + "10";
 					int extraIndex = chrToIndexMap.get(oppCen);
 					recordFusion(karyotypeFusionOutcome, extraIndex);
-				} else {
-					markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint);
+				// } else {
+				// 	markBreakpointToFusionOutcome(karyotypeFusionOutcome, chrBreakpoint); // redundant?
 				}				
 			}
 		}
