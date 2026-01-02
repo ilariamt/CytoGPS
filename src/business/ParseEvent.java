@@ -208,7 +208,8 @@ public class ParseEvent {
     private List<Integer> karyotypeLossOutcome;
     private List<Integer> karyotypeGainOutcome;
     private List<Integer> karyotypeFusionOutcome;
-	private List<List<Integer>> initKaryotypeLGF = new ArrayList<>();
+	// REMOVED: private List<List<Integer>> initKaryotypeLGF = new ArrayList<>(); // initKaryotypeLGF is a class level field - shared across all PareseEvent instances (across all clones)
+	// initKaryotypeLGF moved to local variable
 
     private String[][] chrArmArrays = {CHR1P, CHR1Q, CHR2P, CHR2Q, CHR3P, CHR3Q, CHR4P, CHR4Q, CHR5P, CHR5Q, 
     		                           CHR6P, CHR6Q, CHR7P, CHR7Q, CHR8P, CHR8Q, CHR9P, CHR9Q, CHR10P, CHR10Q, 
@@ -227,9 +228,9 @@ public class ParseEvent {
     	karyotypeLossOutcome = new ArrayList<>(Collections.nCopies(indexToChrMap.size(), 0));
     	karyotypeGainOutcome = new ArrayList<>(karyotypeLossOutcome);
     	karyotypeFusionOutcome = new ArrayList<>(karyotypeLossOutcome);   	
-    	initKaryotypeLGF.add(karyotypeLossOutcome);
-    	initKaryotypeLGF.add(karyotypeGainOutcome);
-    	initKaryotypeLGF.add(karyotypeFusionOutcome);
+    	// initKaryotypeLGF.add(karyotypeLossOutcome);
+    	// initKaryotypeLGF.add(karyotypeGainOutcome);
+    	// initKaryotypeLGF.add(karyotypeFusionOutcome);
     }    
     
     public BiologicalOutcome getEventOutcome(Event e, BiologicalOutcome b) { 
@@ -1006,7 +1007,15 @@ public class ParseEvent {
     public BiologicalOutcome getKaryotypeOutcome(List<Event> eList) {
     	List<String> uncertainEventsList = new ArrayList<>();
     	List<String> derDetailedSystem = new ArrayList<>();
-    	BiologicalOutcome b = new BiologicalOutcome(initKaryotypeLGF, uncertainEventsList, derDetailedSystem);
+    	
+		// CREATE LOCAL initKaryotypeLGF for this specific karyotype instance
+		// class-level only for chromosome mapping
+		List<List<Integer>> initKaryotypeLGF = new ArrayList<>();
+		initKaryotypeLGF.add(new ArrayList<>(Collections.nCopies(indexToChrMap.size(), 0)));  // loss
+		initKaryotypeLGF.add(new ArrayList<>(Collections.nCopies(indexToChrMap.size(), 0)));  // gain
+		initKaryotypeLGF.add(new ArrayList<>(Collections.nCopies(indexToChrMap.size(), 0)));  // fusion
+		
+		BiologicalOutcome b = new BiologicalOutcome(initKaryotypeLGF, uncertainEventsList, derDetailedSystem);
         for (Event e: eList) {
         	for (int i = 1; i <= e.getCopies(); i++) {
         		b = getEventOutcome(e, b);
