@@ -1,0 +1,14 @@
+# Maven
+target/classes/
+target/test-classes/
+target/surefire-reports/
+target/*.jar
+
+# IDE
+.settings/
+.classpath
+.project
+.DS_Store
+
+# notes / description
+DESCRIPTOR.md

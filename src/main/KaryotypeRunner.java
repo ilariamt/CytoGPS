@@ -27,12 +27,22 @@ import validation.Validator;
  * Washington University School of Medicine in St. Louis
  * 
  * Date: August 30, 2021 
+ * Update: January 02, 2026
  */
 public class KaryotypeRunner {
-	
+
 	public static FinalResult getFinalResult(String input){
 		FinalResult finalResult = new FinalResult();
 		String inputNoSpace = input.replaceAll("\\s","");
+
+		// Preprocess to handle '?' symbols
+		// Detect if input contains '?' and strip it for parsing
+		boolean containsQuestionMark = inputNoSpace.contains("?");
+		if (containsQuestionMark) {
+			inputNoSpace = inputNoSpace.replaceAll("\\?", "");
+			// Note: This loses information about WHERE the '?' was located --> so if there was a cytoband after '?' it is taken as certain, but if not, it is treates as uncertain
+		}
+
 		try {
 			KaryotypeLexer lexer = new KaryotypeLexer(CharStreams.fromString(inputNoSpace));
 			lexer.removeErrorListeners();
