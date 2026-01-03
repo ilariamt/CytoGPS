@@ -1,4 +1,6 @@
 # Maven
+./test
+./target
 target/classes/
 target/test-classes/
 target/surefire-reports/
@@ -9,7 +11,9 @@ target/*.jar
 .classpath
 .project
 .DS_Store
+pom.xml
 
 # notes / description
 DESCRIPTOR.md
 *.md
+*.log
