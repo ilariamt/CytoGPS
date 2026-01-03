@@ -12,3 +12,4 @@ target/*.jar
 
 # notes / description
 DESCRIPTOR.md
+*.md
