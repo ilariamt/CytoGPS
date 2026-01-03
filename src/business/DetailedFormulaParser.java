@@ -256,8 +256,8 @@ public class DetailedFormulaParser {
             return;
         }
 
-        // Extract the band (e.g., "13q10" from "13q10")
-        String band = breakpoint.replaceAll("[^0-9pqXY.]", "").toLowerCase();
+        // Breakpoint is already in correct format (e.g., "15q21"), just lowercase it
+        String band = breakpoint.toLowerCase();
 
         // Use parseEvent's mapping to find the index
         Integer index = parseEvent.getChrToIndexMap().get(band);

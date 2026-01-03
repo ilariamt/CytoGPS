@@ -27,8 +27,8 @@ public class BandRangeCalculator {
         List<String> bands = new ArrayList<>();
 
         // Get the index-to-chr mapping
-        var indexToChrMap = parseEvent.getIndexToChrMap();
-        var chrToIndexMap = parseEvent.getChrToIndexMap();
+        java.util.Map<Integer, String> indexToChrMap = parseEvent.getIndexToChrMap();
+        java.util.Map<String, Integer> chrToIndexMap = parseEvent.getChrToIndexMap();
 
         // Handle special cases
         if (start.contains("pter") || start.contains("qter") ||
@@ -183,7 +183,7 @@ public class BandRangeCalculator {
      */
     public static List<String> getAllBandsInArm(String chrArm) {
         List<String> bands = new ArrayList<>();
-        var indexToChrMap = parseEvent.getIndexToChrMap();
+        java.util.Map<Integer, String> indexToChrMap = parseEvent.getIndexToChrMap();
 
         String chrArmLower = chrArm.toLowerCase();
 

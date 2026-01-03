@@ -12,6 +12,7 @@ target/*.jar
 .project
 .DS_Store
 pom.xml
+.github
 
 # notes / description
 DESCRIPTOR.md
