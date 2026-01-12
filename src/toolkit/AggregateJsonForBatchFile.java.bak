@@ -35,11 +35,7 @@ public class AggregateJsonForBatchFile {
             
         	String s;
         	while ((s = br.readLine()) != null) {	
-					String karyotype = s;
-					// Strip surrounding quotes if present (from CSV output)
-					if (karyotype.startsWith("\"") && karyotype.endsWith("\"")) {
-						karyotype = karyotype.substring(1, karyotype.length() - 1);
-					}
+        		String karyotype = s;
     			FinalResult finalResult = KaryotypeRunner.getFinalResult(karyotype);
     			JsonObjectBuilder cytogpsOutputBuilder = Json.createObjectBuilder().add("karyotype", karyotype);
     			if (finalResult.isContainingLexerParserError()) {
@@ -141,18 +137,14 @@ public class AggregateJsonForBatchFile {
     					if (b.getUncertainEventsList().size() > 0) {
     						JsonArrayBuilder uncertainEventsBuilder = Json.createArrayBuilder();
     						for (String u: b.getUncertainEventsList()) {
-    							if (u != null) {
-    								uncertainEventsBuilder.add(u);
-    							}
+    							uncertainEventsBuilder.add(u);
     						}
     						cloneParsingResultBuilder.add("uncertain_events", uncertainEventsBuilder);
     					}
     					if (b.getDetailedSystem().size() > 0) {
     						JsonArrayBuilder detailedSystemsBuilder = Json.createArrayBuilder();
     						for (String d: b.getDetailedSystem()) {
-    							if (d != null) {
-    								detailedSystemsBuilder.add(d);
-    							}
+    							detailedSystemsBuilder.add(d);
     						}
     						cloneParsingResultBuilder.add("derivative_chromosome_detailed_systems", detailedSystemsBuilder);
     					}
@@ -204,8 +196,8 @@ public class AggregateJsonForBatchFile {
 			throw e;
         } finally {
             try {
-                if (br != null) br.close();
-                if (fr != null) fr.close();
+                br.close();
+                fr.close();
             } catch (Exception e) {
             	throw e; 
             }

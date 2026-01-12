@@ -287,8 +287,36 @@ public class ParseEvent {
             	} else {
             		breakpointsFullName = null;
             	}     			
-    	
-            	switch (e.getNature()) {
+				// Check if this is a detailed formula for events like dic, del, add, r
+				boolean isDetailedFormulaEvent = false;
+				String detailedFormulaTextEvent = null;
+				if (e.getBreakpoints().size() > 0) {
+					List<String> firstBreakpointList = e.getBreakpoints().get(0);
+					if (firstBreakpointList != null && !firstBreakpointList.isEmpty()) {
+						String firstBreakpoint = firstBreakpointList.get(0);
+						if (firstBreakpoint != null && firstBreakpoint.startsWith("DETAILED:")) {
+							isDetailedFormulaEvent = true;
+							detailedFormulaTextEvent = firstBreakpoint.substring(9); // Remove prefix
+						}
+					}
+				}
+
+					if (isDetailedFormulaEvent) {
+					// Route to DetailedFormulaParser for events with detailed formulas
+					DetailedFormulaParser detailedParser = new DetailedFormulaParser();
+					String fullFormula = e.getNature() + "(" + String.join(";", e.getChrList()) + ")(" + detailedFormulaTextEvent + ")";
+					BiologicalOutcome detailedOutcome = detailedParser.parseDetailedFormula(fullFormula);
+
+					// Merge LGF vectors from detailed formula
+					if (detailedOutcome != null && detailedOutcome.getKaryotypeLGF() != null) {
+						updateLoss(karyotypeLossOutcome, detailedOutcome.getKaryotypeLGF());
+						updateGain(karyotypeGainOutcome, detailedOutcome.getKaryotypeLGF());
+						updateFusion(karyotypeFusionOutcome, detailedOutcome.getKaryotypeLGF());
+						b.getDetailedSystem().addAll(detailedOutcome.getDetailedSystem());
+					}
+				} else {
+					// Standard processing for non-detailed formulas
+            		switch (e.getNature()) {
             	
 	            	case "add": {
 	            		processLossFusionEvent(karyotypeLossOutcome, karyotypeFusionOutcome, breakpointsFullName);
@@ -372,20 +400,54 @@ public class ParseEvent {
     					updateLoss(karyotypeLossOutcome, derKaryotypeLGF);
     					updateGain(karyotypeGainOutcome, derKaryotypeLGF);
     					updateFusion(karyotypeFusionOutcome, derKaryotypeLGF);
-    					b.getDetailedSystem().add(d.getDetailedSystem());            		
+    					if (d.getDetailedSystem() != null) {
+    						b.getDetailedSystem().add(d.getDetailedSystem());
+    					}
 	            		break;
 	            	}
         			case "der": {
-        				
-        				List<String> chrList = e.getChrList();
-    					if (chrList.size() == 1) {
-    						
-        					DerivativeValidationOutcome d = new DerivativeValidation((DerEvent)e).getDerivativeValidationOutcome();	
-        					List<List<Integer>> derKaryotypeLGF = d.getDerKaryotypeLGF();
-        					updateLoss(karyotypeLossOutcome, derKaryotypeLGF);
-        					updateGain(karyotypeGainOutcome, derKaryotypeLGF);
-        					updateFusion(karyotypeFusionOutcome, derKaryotypeLGF);
-        					b.getDetailedSystem().add(d.getDetailedSystem());                            
+
+        				// Check if this is a detailed formula (marked with "DETAILED:" prefix)
+        				boolean isDetailedFormula = false;
+        				String detailedFormulaText = null;
+        				if (e.getBreakpoints().size() > 0) {
+        					List<String> firstBreakpointList = e.getBreakpoints().get(0);
+        					if (firstBreakpointList != null && !firstBreakpointList.isEmpty()) {
+        						String firstBreakpoint = firstBreakpointList.get(0);
+        						if (firstBreakpoint != null && firstBreakpoint.startsWith("DETAILED:")) {
+        							isDetailedFormula = true;
+        							detailedFormulaText = firstBreakpoint.substring(9); // Remove "DETAILED:" prefix
+        						}
+        					}
+        				}
+
+        				if (isDetailedFormula) {
+        					// Route to DetailedFormulaParser
+        					DetailedFormulaParser detailedParser = new DetailedFormulaParser();
+        					// Reconstruct full der(...) notation for parser
+        					String fullFormula = "der(" + String.join(";", e.getChrList()) + ")(" + detailedFormulaText + ")";
+        					BiologicalOutcome detailedOutcome = detailedParser.parseDetailedFormula(fullFormula);
+
+        					// Merge LGF vectors from detailed formula
+        					if (detailedOutcome != null && detailedOutcome.getKaryotypeLGF() != null) {
+        						updateLoss(karyotypeLossOutcome, detailedOutcome.getKaryotypeLGF());
+        						updateGain(karyotypeGainOutcome, detailedOutcome.getKaryotypeLGF());
+        						updateFusion(karyotypeFusionOutcome, detailedOutcome.getKaryotypeLGF());
+        						b.getDetailedSystem().addAll(detailedOutcome.getDetailedSystem());
+        					}
+        				} else {
+        					// Standard derivative processing
+        					List<String> chrList = e.getChrList();
+        					if (chrList.size() == 1) {
+
+            					DerivativeValidationOutcome d = new DerivativeValidation((DerEvent)e).getDerivativeValidationOutcome();
+            					List<List<Integer>> derKaryotypeLGF = d.getDerKaryotypeLGF();
+            					updateLoss(karyotypeLossOutcome, derKaryotypeLGF);
+            					updateGain(karyotypeGainOutcome, derKaryotypeLGF);
+            					updateFusion(karyotypeFusionOutcome, derKaryotypeLGF);
+            					if (d.getDetailedSystem() != null) {
+            						b.getDetailedSystem().add(d.getDetailedSystem());
+            					}                            
         					
         				} else {		
         					
@@ -402,24 +464,53 @@ public class ParseEvent {
         							d = new DicDerivativeValidationDifferentDerChrWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome();
         						} else {
         							List<List<String>> derCens = e.getBreakpointsFullName(chrList, e.getBreakpoints());
-        							if (!getChrArm(derCens.get(0).get(0)).equals(getChrArm(derCens.get(1).get(0)))) {
-        								d = new DicDerivativeValidationDifferentDerChrWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome();
-        							} else {
+        							// Check if breakpoints are centromeric before applying specific validation
+        							if (derCens == null || derCens.isEmpty()) {
+        								// Fallback if derCens is null
         								d = new DicDerivativeValidationSameDerChrSameArmWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome();
+        							} else {
+        								boolean allCentromeric = true;
+        								for (List<String> breakpointList : derCens) {
+        									for (String breakpoint : breakpointList) {
+        										if (!isValidCen(getBreakpoint(breakpoint))) {
+        											allCentromeric = false;
+        											break;
+        										}
+        									}
+        									if (!allCentromeric) break;
+        								}
+        								
+        								if (!getChrArm(derCens.get(0).get(0)).equals(getChrArm(derCens.get(1).get(0)))) {
+        									// Different chromosome arms
+        									d = new DicDerivativeValidationDifferentDerChrWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome();
+        								} else if (allCentromeric) {
+        									// Same chromosome arm AND all breakpoints are centromeric
+        									d = new DicDerivativeValidationSameDerChrSameArmWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome();
+        								} else {
+        									// Same chromosome arm but NON-centromeric breakpoints: skip DIC validation
+        									// This case is not covered by DIC validation classes, so we skip it
+        									d = null;
+        								}
         							}
         						}    							        						
         					}
-        					List<List<Integer>> derKaryotypeLGF = d.getDerKaryotypeLGF();
-        					updateLoss(karyotypeLossOutcome, derKaryotypeLGF);
-        					updateGain(karyotypeGainOutcome, derKaryotypeLGF);
-        					updateFusion(karyotypeFusionOutcome, derKaryotypeLGF);
-        					b.getDetailedSystem().add(d.getDetailedSystem());                                    
+        					if (d != null) {
+        						List<List<Integer>> derKaryotypeLGF = d.getDerKaryotypeLGF();
+        						updateLoss(karyotypeLossOutcome, derKaryotypeLGF);
+        						updateGain(karyotypeGainOutcome, derKaryotypeLGF);
+        						updateFusion(karyotypeFusionOutcome, derKaryotypeLGF);
+        						if (d.getDetailedSystem() != null) {
+        							b.getDetailedSystem().add(d.getDetailedSystem());
+        						}
+        					}                                    
         					
-        				} // End of else (e.getChrList().size() == 1), which implies e.getChrList().size() == 2     				        				         				
-        				// Due to our validation, we don't consider tricentric derived chromosomes. In general, is it possible to have a derivative chromosome with more than two derived chromosomes? 
+        				} // End of else (e.getChrList().size() == 1), which implies e.getChrList().size() == 2
+        				} // End of else (isDetailedFormula)
+        				// Due to our validation, we don't consider tricentric derived chromosomes. In general, is it possible to have a derivative chromosome with more than two derived chromosomes?
         				break;
         			} // End of case "der"
             	} // End of big switch
+				} // End of else (isDetailedFormulaEvent)
             	
 //            	cancelOutLossGain(karyotypeLGF);
     			
@@ -634,18 +725,27 @@ public class ParseEvent {
     }
     
     private void updateLoss(List<Integer> karyotypeLossOutcome, List<List<Integer>> derKaryotypeLGF) {
+    	if (derKaryotypeLGF == null || derKaryotypeLGF.isEmpty() || derKaryotypeLGF.get(0) == null) {
+    		return;
+    	}
     	IntStream.range(0, derKaryotypeLGF.get(0).size())
     	         .filter(i->derKaryotypeLGF.get(0).get(i)>0)
     	         .forEach(i->karyotypeLossOutcome.set(i, derKaryotypeLGF.get(0).get(i) + karyotypeLossOutcome.get(i)));
     }
     
     private void updateGain(List<Integer> karyotypeGainOutcome, List<List<Integer>> derKaryotypeLGF) {
+    	if (derKaryotypeLGF == null || derKaryotypeLGF.size() < 2 || derKaryotypeLGF.get(1) == null) {
+    		return;
+    	}
     	IntStream.range(0, derKaryotypeLGF.get(1).size())
     	         .filter(i -> derKaryotypeLGF.get(1).get(i)>0)
     	         .forEach(i -> karyotypeGainOutcome.set(i, derKaryotypeLGF.get(1).get(i) + karyotypeGainOutcome.get(i)));
     }
     
     private void updateFusion(List<Integer> karyotypeFusionOutcome, List<List<Integer>> derKaryotypeLGF) {
+    	if (derKaryotypeLGF == null || derKaryotypeLGF.size() < 3 || derKaryotypeLGF.get(2) == null) {
+    		return;
+    	}
     	IntStream.range(0, derKaryotypeLGF.get(2).size())
     	         .filter(i -> derKaryotypeLGF.get(2).get(i)>0)
     	         .forEach(i -> karyotypeFusionOutcome.set(i, derKaryotypeLGF.get(2).get(i) + karyotypeFusionOutcome.get(i)));
@@ -764,6 +864,15 @@ public class ParseEvent {
 			oppositeChrArm = chrArm.substring(0, chrArm.indexOf('q')) + "p";
 		}
 		return oppositeChrArm;
+	}
+	
+	/**
+	 * Check if a breakpoint is centromeric (band 10)
+	 * @param breakpoint the breakpoint string (e.g., "p10" or "q10")
+	 * @return true if the breakpoint is at the centromere, false otherwise
+	 */
+	public boolean isValidCen(String breakpoint) {
+		return breakpoint.endsWith("10");
 	}
 	
 	public String getLastElement(List<String> list) {

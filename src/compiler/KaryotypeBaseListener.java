@@ -883,6 +883,18 @@ public class KaryotypeBaseListener implements KaryotypeListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterDetailedBreakpointsList(KaryotypeParser.DetailedBreakpointsListContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDetailedBreakpointsList(KaryotypeParser.DetailedBreakpointsListContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterIncorrectBreakpointsList(KaryotypeParser.IncorrectBreakpointsListContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -974,6 +986,18 @@ public class KaryotypeBaseListener implements KaryotypeListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitCorrectRBreakpointsList(KaryotypeParser.CorrectRBreakpointsListContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterDetailedRBreakpointsList(KaryotypeParser.DetailedRBreakpointsListContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDetailedRBreakpointsList(KaryotypeParser.DetailedRBreakpointsListContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -1238,6 +1262,54 @@ public class KaryotypeBaseListener implements KaryotypeListener {
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitDerId(KaryotypeParser.DerIdContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterDetailedFormula(KaryotypeParser.DetailedFormulaContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDetailedFormula(KaryotypeParser.DetailedFormulaContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterDetailedSegmentList(KaryotypeParser.DetailedSegmentListContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDetailedSegmentList(KaryotypeParser.DetailedSegmentListContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterDetailedSegment(KaryotypeParser.DetailedSegmentContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDetailedSegment(KaryotypeParser.DetailedSegmentContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterDetailedBreakpoint(KaryotypeParser.DetailedBreakpointContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDetailedBreakpoint(KaryotypeParser.DetailedBreakpointContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *

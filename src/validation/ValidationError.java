@@ -954,6 +954,23 @@ public class ValidationError {
 				return validationMessageList;
 			}
 			case "der": {
+				// Check if this is a detailed formula
+				boolean isDetailedFormula = false;
+				if (breakpoints.size() > 0) {
+					List<String> firstBreakpointList = breakpoints.get(0);
+					if (firstBreakpointList != null && !firstBreakpointList.isEmpty()) {
+						String firstBreakpoint = firstBreakpointList.get(0);
+						if (firstBreakpoint != null && firstBreakpoint.startsWith("DETAILED:")) {
+							isDetailedFormula = true;
+						}
+					}
+				}
+
+				// Skip standard validation for detailed formulas - they're handled by DetailedFormulaParser
+				if (isDetailedFormula) {
+					break;
+				}
+
 				boolean allStructuralRearrangementsValid = true;
 				if (chrList.size() != 1 && chrList.size() != 2) {
 					validationMessageList.add(errorHead + "the cytogenetic \"der\" event can happen on a single chromosome or two chromosomes, but there are " + chrList.size() + " chromosomes");
@@ -1016,13 +1033,6 @@ public class ValidationError {
 							if (breakpoints.get(1).size() != 1) {
 								validationMessageList.add(errorHead + "the cytogenetic \"der\" event can involve only one breakpoint on each chromosome, but there are " + breakpoints.get(1).size() + " breakpoints for chromosome \"" + chrList.get(1) + "\"");
 							}
-						} else if (!isValidCenList(e.getBreakpointsFullName(chrList, breakpoints))) {
-							breakpointsFullName = e.getBreakpointsFullName(chrList, breakpoints);
-							for (List<String> chrBreakpoints: breakpointsFullName) {			
-								if (!isValidCen(chrBreakpoints.get(0))) {
-									validationMessageList.add(errorHead + "the breakpoint of the cytogenetic \"der\" event must be a centromeric band, either p10 or q10, but \"" + chrBreakpoints.get(0) + "\" is not such one");
-								}
-							}							
 						} else if (((DerEvent)e).getSubevents().size() > 0) {
 							for (Event subevent: ((DerEvent)e).getSubevents()) {
 								if (!subevent.isUncertainEvent()) {

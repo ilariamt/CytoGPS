@@ -388,11 +388,6 @@ public class KaryotypeLoader extends KaryotypeBaseListener {
 		// Set flag to prevent processing of chr/band elements inside the formula
 		insideDetailedFormula = true;
 
-		// Initialize derBreakpoints if it has not been initialized yet
-		if (derBreakpoints == null) {
-			derBreakpoints = new ArrayList<String>();
-		}
-
 		// Mark this as a detailed formula event by adding a special prefix
 		String detailedFormulaText = ctx.getText();
 		derBreakpoints.add("DETAILED:" + detailedFormulaText);

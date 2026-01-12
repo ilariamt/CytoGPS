@@ -24,6 +24,7 @@ main/ListErrorListener$ErrorString.class
 business/Event.class
 compiler/KaryotypeParser$OrSexContext.class
 business/DerEvent.class
+compiler/KaryotypeVisitor.class
 compiler/KaryotypeParser$CloneContext.class
 business/Clone.class
 compiler/KaryotypeParser$RChrListContext.class
@@ -38,6 +39,7 @@ compiler/KaryotypeParser$CorrectDerBreakpointsListContext.class
 compiler/KaryotypeParser$UndecodedContext.class
 compiler/KaryotypeParser$UncertainChrContext.class
 toolkit/Permutation.class
+compiler/KaryotypeParser$DetailedSegmentContext.class
 compiler/KaryotypeParser$IncorrectSlantContext.class
 compiler/KaryotypeParser$IncorrectBreakpointsListElementsContext.class
 compiler/KaryotypeParser$RearrangementContext.class
@@ -58,6 +60,7 @@ compiler/KaryotypeParser$BreakpointsListElementsContext.class
 compiler/KaryotypeParser$DminNumContext.class
 compiler/KaryotypeParser$SlSpecialContext.class
 compiler/KaryotypeParser$BasicAberrationContext.class
+compiler/KaryotypeParser$DetailedSegmentListContext.class
 compiler/KaryotypeParser$MultipleInterpretationRearrangementContext.class
 compiler/KaryotypeParser$CenContext.class
 compiler/KaryotypeParser$BasicAberrationErrorContext.class
@@ -88,6 +91,7 @@ compiler/KaryotypeParser$MultiplicationContext.class
 compiler/KaryotypeParser$IdContext.class
 compiler/KaryotypeParser$FirstStemlineGroupContext.class
 compiler/KaryotypeParser$IdUncertainChrContext.class
+compiler/KaryotypeParser$DetailedBreakpointContext.class
 compiler/KaryotypeParser$SlEventContext.class
 compiler/KaryotypeParser$ChrContext.class
 compiler/KaryotypeParser$SuffixContext.class
@@ -106,6 +110,7 @@ business/FinalResult.class
 compiler/KaryotypeParser$IdemSpecialContext.class
 validation/DicDerivativeValidationDifferentDerChrNoBreakpoints.class
 compiler/KaryotypeParser$NormalDerBreakpointsContext.class
+compiler/KaryotypeParser$DetailedRBreakpointsListContext.class
 compiler/KaryotypeParser$UndeterminedPrefixContext.class
 toolkit/ISCN2016.class
 compiler/KaryotypeParser$IncorrectBreakpointsListContext.class
@@ -150,6 +155,7 @@ business/DetailedFormulaParser$Segment.class
 compiler/KaryotypeParser$IncorrectDerChrListContext.class
 compiler/KaryotypeParser$RBreakpointsListContext.class
 compiler/KaryotypeParser$MarNumContext.class
+compiler/KaryotypeParser$DetailedFormulaContext.class
 compiler/KaryotypeParser$CorrectBreakpointsListContext.class
 main/KaryotypeRunner.class
 compiler/KaryotypeParser$AdditionalCloneContext.class
@@ -164,9 +170,11 @@ compiler/KaryotypeParser$NumRangeTypeIIContext.class
 compiler/KaryotypeParser$BreakpointContext.class
 compiler/KaryotypeParser$IncorrectModalNumContext.class
 compiler/KaryotypeParser$AdditionalStemlineCloneContext.class
+compiler/KaryotypeBaseVisitor.class
 compiler/KaryotypeParser$GenderContext.class
 compiler/KaryotypeParser$InhContext.class
 compiler/KaryotypeParser$RIdContext.class
+compiler/KaryotypeParser$DetailedBreakpointsListContext.class
 compiler/KaryotypeParser$DerBreakpointsListContext.class
 compiler/KaryotypeParser$UncertainBasicAberrationContext.class
 compiler/KaryotypeParser$NumRangeTypeIContext.class

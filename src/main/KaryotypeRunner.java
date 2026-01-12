@@ -36,14 +36,28 @@ public class KaryotypeRunner {
 		FinalResult finalResult = new FinalResult();
 		String inputNoSpace = input.replaceAll("\\s","");
 
+		// Strip leading/trailing quotes (common in database exports)
+		inputNoSpace = inputNoSpace.trim();
+		if (inputNoSpace.startsWith("\"") && inputNoSpace.endsWith("\"")) {
+			inputNoSpace = inputNoSpace.substring(1, inputNoSpace.length() - 1);
+		}
+
+		// Check if this is a multi-clone karyotype (contains / separating clones)
+		// Multi-clone karyotypes MUST go through ANTLR to parse clone structure
+		boolean isMultiClone = inputNoSpace.contains("]/") || inputNoSpace.matches(".*\\]\\s*/\\s*\\d+.*");
+
 		// NEW: Check if detailed formula exists in the input
 		if (DetailedFormulaParser.isDetailedFormula(inputNoSpace)) {
-			// Check if it's ONLY detailed formulas or mixed format
-			if (isMixedFormat(inputNoSpace)) {
-				// Mixed format: parse both standard and detailed events
+			// For non-multi-clone inputs with detailed formulas, use parseMixedFormat
+			// Multi-clone inputs should go through standard ANTLR parsing directly
+			if (isMultiClone) {
+				// Multi-clone with detailed formulas: try standard ANTLR first
+				// If that fails, fall through to handle it
+			} else if (isMixedFormat(inputNoSpace)) {
+				// Single-clone mixed format: parse both standard and detailed events
 				return parseMixedFormat(inputNoSpace, finalResult);
 			} else {
-				// Pure detailed formula: route to detailed formula parser only
+				// Pure detailed formula (single-clone): route to detailed formula parser only
 				DetailedFormulaParser detailedParser = new DetailedFormulaParser();
 				BiologicalOutcome b = detailedParser.parseDetailedFormula(inputNoSpace);
 
@@ -51,6 +65,17 @@ public class KaryotypeRunner {
 				finalResult.getBiologicalInterpretationList().add(
 					BiologicalOutcome.getBiologicalInterpretation(b)
 				);
+				
+				// Set clone information for JSON output
+				// For pure detailed formulas, create a single clone with the full karyotype code
+				List<Clone> singleClone = new java.util.ArrayList<>();
+				Clone clone = new Clone();
+				clone.setCloneCode(inputNoSpace);
+				singleClone.add(clone);
+				finalResult.setCloneCodeList(finalResult.getCloneCodeList(singleClone));
+				finalResult.setCellNumList(finalResult.getCellNumList(singleClone));
+				finalResult.setRelationshipList(finalResult.getRelationshipList(singleClone));
+				
 				return finalResult;
 			}
 		}
@@ -99,6 +124,12 @@ public class KaryotypeRunner {
 			}		
 			
 		} catch (ParseCancellationException ex) {
+			// Check if this is multi-clone with detailed formulas (failed ANTLR parsing)
+			if (isMultiClone && DetailedFormulaParser.isDetailedFormula(inputNoSpace)) {
+				// Try to parse multi-clone with detailed formulas by handling each clone separately
+				return parseMultiCloneWithDetailedFormulas(inputNoSpace, finalResult);
+			}
+			
 			finalResult.setContainingLexerParserError(true);
 			KaryotypeLexer lexer = new KaryotypeLexer(CharStreams.fromString(inputNoSpace));
 			ListErrorListener listErrorListener = new ListErrorListener();
@@ -149,17 +180,21 @@ public class KaryotypeRunner {
 	 * Mixed format example: 46,XX,del(5)(q13q31),der(13)(13pter->13q10::15q10->15q21::13q14->13qter)
 	 */
 	private static boolean isMixedFormat(String input) {
-		// Check if there are standard ISCN events alongside detailed formulas
-		// Standard events include: del, dup, inv, t, add, etc.
-		// They have the pattern: event(chr)(breakpoints) where breakpoints don't contain ::
+		// Check if there are both standard and detailed formulas in the input
+		// Standard events: del, dup, inv, t, add, der (without detailed notation), dic (without detailed notation), r, +, -
+		// Detailed events: der/dic/r with -> or :: in the notation part
 
-		// Look for events that are NOT detailed formulas
-		// Standard events: del(...), dup(...), inv(...), t(...), add(...), etc.
-		String[] standardEvents = {"del\\(", "dup\\(", "inv\\(", "t\\(", "add\\(", "i\\(", "r\\(",
-		                            "dic\\(", "idic\\(", "ins\\(", "trp\\(", "qdp\\(", "\\+", "-"};
+		// First, remove all detailed formulas from the input to avoid false positives
+		String inputWithoutDetailed = input.replaceAll("(?:der|dic|r)\\([^)]+\\)\\([^)]*(?:->|::)[^)]*\\)", "");
+
+		// Look for standard events in the remaining input
+		// Standard events: del(...), dup(...), inv(...), t(...), add(...), der(...), dic(...), r(...), i(...), +, -
+		String[] standardEvents = {"del\\(", "dup\\(", "inv\\(", "t\\(", "add\\(", "i\\(",
+		                            "idic\\(", "ins\\(", "trp\\(", "qdp\\(", 
+		                            "der\\(", "dic\\(", "r\\(", "\\+", "-"};
 
 		for (String event : standardEvents) {
-			if (input.matches(".*" + event + ".*")) {
+			if (inputWithoutDetailed.matches(".*" + event + ".*")) {
 				return true;
 			}
 		}
@@ -177,51 +212,54 @@ public class KaryotypeRunner {
 	 * 5. Merge LGF results
 	 */
 	private static FinalResult parseMixedFormat(String input, FinalResult finalResult) {
-		// Step 1: Extract detailed formulas
-		java.util.List<String> detailedFormulas = new java.util.ArrayList<>();
-		java.util.regex.Pattern derPattern = java.util.regex.Pattern.compile("der\\(([^)]+)\\)\\(([^)]+)\\)");
-		java.util.regex.Matcher derMatcher = derPattern.matcher(input);
+		// Check if this is multi-clone (has ] followed by /)
+		boolean isMultiClone = input.contains("]/");
 
-		StringBuilder standardOnlyInput = new StringBuilder(input);
-		int offset = 0; // Track position changes due to replacements
+		// Step 1: Extract detailed formulas using balanced parenthesis parsing
+		java.util.List<String> detailedFormulas = extractDetailedFormulas(input);
 
-		while (derMatcher.find()) {
-			String fullMatch = derMatcher.group(0);
-			// Check if this is a detailed formula (contains -> or ::)
-			if (fullMatch.contains("->") || fullMatch.contains("::")) {
-				detailedFormulas.add(fullMatch);
-
-				// Remove from standard input (replace with placeholder to maintain comma structure)
-				int start = derMatcher.start() - offset;
-				int end = derMatcher.end() - offset;
-
-				// Check if there's a comma before or after that we need to handle
-				String before = (start > 0) ? standardOnlyInput.substring(Math.max(0, start - 1), start) : "";
-				String after = (end < standardOnlyInput.length()) ? standardOnlyInput.substring(end, Math.min(end + 1, standardOnlyInput.length())) : "";
-
-				// Remove the detailed formula
-				standardOnlyInput.delete(start, end);
-
-				// Clean up extra commas
-				if (before.equals(",") && after.equals(",")) {
-					// Two commas in a row, remove one
-					if (start < standardOnlyInput.length() && standardOnlyInput.charAt(start) == ',') {
-						standardOnlyInput.deleteCharAt(start);
-					}
-				}
-
-				offset += fullMatch.length();
-			}
+		// Step 1b: Remove detailed formulas from input to get standard-only input
+		String standardInput = input;
+		for (String formula : detailedFormulas) {
+			standardInput = standardInput.replace(formula, "");
 		}
-
+		
 		// Clean up the standard input
-		String standardInput = standardOnlyInput.toString()
+		standardInput = standardInput
 			.replaceAll(",,+", ",")  // Remove double commas
 			.replaceAll(",$", "")     // Remove trailing comma
 			.replaceAll(",\\)", ")"); // Remove comma before closing paren
 
+		// For multi-clone input, handle each clone separately
+		if (isMultiClone && hasStandardEvents(standardInput)) {
+			// Split by ]/ to get individual clones
+			String[] cloneSections = standardInput.split("\\]/");
+			StringBuilder reconstructedInput = new StringBuilder();
+
+			for (int i = 0; i < cloneSections.length; i++) {
+				String clone = cloneSections[i];
+				if (i < cloneSections.length - 1) {
+					// Not the last clone - add back the ][count] part
+					// Extract the count (e.g., "[8]" becomes "8")
+					java.util.regex.Pattern countPattern = java.util.regex.Pattern.compile("\\[(\\d+)\\]$");
+					java.util.regex.Matcher matcher = countPattern.matcher(clone);
+					if (matcher.find()) {
+						clone = matcher.replaceAll(""); // Remove the count
+					}
+					reconstructedInput.append(clone).append("]/");
+				} else {
+					// Last clone - just append as-is
+					reconstructedInput.append(clone);
+				}
+			}
+
+			standardInput = reconstructedInput.toString();
+		}
+
 		// Step 2: Parse standard ISCN events (if any remain)
 		BiologicalOutcome standardOutcome = null;
+		List<Clone> rowClones = new java.util.ArrayList<>();
+		
 		if (hasStandardEvents(standardInput)) {
 			// Preprocess to handle '?' symbols
 			String processedStandardInput = standardInput;
@@ -242,11 +280,11 @@ public class KaryotypeRunner {
 				KaryotypeLoader loader = new KaryotypeLoader();
 				walker.walk(loader, tree);
 
-				List<Clone> rowClones = loader.getRowClones();
+				rowClones = loader.getRowClones();
 				new ParseEvent().processMissingBreakpoints(rowClones);
 				new ParseEvent().markUncertainDerEvent(rowClones);
 
-				// Get the first biological outcome (assuming single clone for now)
+				// Get outcomes for all clones in multi-clone case
 				List<BiologicalOutcome> outcomes = new ParseEvent().getMultipleCloneRowOutcome(rowClones);
 				if (!outcomes.isEmpty()) {
 					standardOutcome = outcomes.get(0);
@@ -273,6 +311,11 @@ public class KaryotypeRunner {
 			finalResult.getBiologicalInterpretationList().add(
 				BiologicalOutcome.getBiologicalInterpretation(mergedOutcome)
 			);
+			
+			// Set clone information for JSON output (needed by AggregateJsonForBatchFile)
+			finalResult.setCloneCodeList(finalResult.getCloneCodeList(rowClones));
+			finalResult.setCellNumList(finalResult.getCellNumList(rowClones));
+			finalResult.setRelationshipList(finalResult.getRelationshipList(rowClones));
 		}
 
 		return finalResult;
@@ -328,4 +371,141 @@ public class KaryotypeRunner {
 		return new BiologicalOutcome(mergedLGF, mergedUncertain, mergedDetailed);
 	}
 
+	/**
+	 * Extract all detailed formulas from input string using balanced parenthesis parsing.
+	 * This correctly handles nested parentheses and multiple detailed formulas.
+	 * Only extracts formulas with -> or :: inside (actual detailed formulas).
+	 * 
+	 * Examples:
+	 * - "der(11)(11pter->11q11::22q11->22q13::11q22->11qter)" -> [der(11)(11pter->11q11::22q11->22q13::11q22->11qter)]
+	 * - "der(9)t(9;17)(q11;q34)" -> [] (NOT extracted - no -> or ::)
+	 */
+	private static java.util.List<String> extractDetailedFormulas(String input) {
+		java.util.List<String> detailedFormulas = new java.util.ArrayList<>();
+		
+		// Find all der/dic/r patterns with balanced parentheses
+		int i = 0;
+		while (i < input.length()) {
+			// Look for der, dic, or r at position i
+			// For der/dic, we need 4 chars: "der(" or "dic("
+			// For r, we need 2 chars: "r(" and must ensure r is not part of "der" or "dic"
+			
+			boolean foundDer = i <= input.length() - 4 && input.startsWith("der(", i);
+			boolean foundDic = i <= input.length() - 4 && input.startsWith("dic(", i);
+			boolean foundR = i <= input.length() - 2 && input.startsWith("r(", i) && 
+							 (i == 0 || input.charAt(i-1) == ','); // r must be after comma or at start
+			
+			if (foundDer || foundDic || foundR) {
+				// Find the start of the formula
+				int formulaStart = i;
+				
+				// Skip past "der(" or "dic(" or "r("
+				int j = i + (foundR ? 2 : 4);
+				
+				// Find matching ) for the first set of parentheses (base chromosome spec)
+				int parenCount = 1;
+				while (j < input.length() && parenCount > 0) {
+					if (input.charAt(j) == '(') parenCount++;
+					else if (input.charAt(j) == ')') parenCount--;
+					j++;
+				}
+				
+				// Now j is right after the first )
+				// Check if the next character is (
+				if (j < input.length() && input.charAt(j) == '(') {
+					// Find matching ) for the second set of parentheses (detailed formula)
+					int secondParenStart = j;
+					j++; // Skip the (
+					parenCount = 1;
+					while (j < input.length() && parenCount > 0) {
+						if (input.charAt(j) == '(') parenCount++;
+						else if (input.charAt(j) == ')') parenCount--;
+						j++;
+					}
+					
+					// Extract the complete formula
+					String formula = input.substring(formulaStart, j);
+					
+					// Only add if it contains -> or :: (actual detailed formula)
+					if (formula.contains("->") || formula.contains("::")) {
+						detailedFormulas.add(formula);
+					}
+					
+					i = j;
+				} else {
+					i++;
+				}
+			} else {
+				i++;
+			}
+		}
+		
+		return detailedFormulas;
+	}
+
+	/**
+	 * Parse multi-clone karyotype with detailed formulas by processing each clone separately
+	 */
+	private static FinalResult parseMultiCloneWithDetailedFormulas(String input, FinalResult finalResult) {
+		try {
+			// Split by ]/ to get individual clones
+			String[] cloneParts = input.split("\\]/");
+			List<BiologicalOutcome> allOutcomes = new java.util.ArrayList<>();
+			List<String> allCodes = new java.util.ArrayList<>();
+			List<Integer> allCellNums = new java.util.ArrayList<>();
+			List<String> allRelationships = new java.util.ArrayList<>();
+			
+			for (int i = 0; i < cloneParts.length; i++) {
+				String clonePart = cloneParts[i];
+				if (i < cloneParts.length - 1) {
+					// Not the last clone - add back the ] and extract count
+					clonePart = clonePart + "]";
+				}
+				
+				// Extract cell count if present
+				int cellCount = 0;
+				java.util.regex.Pattern countPattern = java.util.regex.Pattern.compile("\\[(\\d+)\\]");
+				java.util.regex.Matcher matcher = countPattern.matcher(clonePart);
+				if (matcher.find()) {
+					cellCount = Integer.parseInt(matcher.group(1));
+					// Remove the count from the clone part for parsing
+					clonePart = clonePart.substring(0, matcher.start()) + clonePart.substring(matcher.end());
+				}
+				
+				// Parse individual clone using standard getFinalResult logic
+				FinalResult cloneResult = getFinalResult(clonePart);
+				
+				// Collect results from this clone
+				if (!cloneResult.getBiologicalOutcomeList().isEmpty()) {
+					for (BiologicalOutcome outcome : cloneResult.getBiologicalOutcomeList()) {
+						allOutcomes.add(outcome);
+						allCodes.add(clonePart);
+						allCellNums.add(cellCount);
+						allRelationships.add("");
+					}
+				}
+			}
+			
+			// Add all collected outcomes to final result
+			for (BiologicalOutcome outcome : allOutcomes) {
+				finalResult.getBiologicalOutcomeList().add(outcome);
+				finalResult.getBiologicalInterpretationList().add(
+					BiologicalOutcome.getBiologicalInterpretation(outcome)
+				);
+			}
+			
+			finalResult.setCloneCodeList(allCodes);
+			finalResult.setCellNumList(allCellNums);
+			finalResult.setRelationshipList(allRelationships);
+			
+			return finalResult;
+		} catch (Exception e) {
+			// If multi-clone parsing fails, set error
+			finalResult.setContainingLexerParserError(true);
+			finalResult.setErrorMessage("Failed to parse multi-clone karyotype with detailed formulas: " + e.getMessage());
+			return finalResult;
+		}
+	}
+
 }
+

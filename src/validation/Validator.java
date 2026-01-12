@@ -139,6 +139,11 @@ public class Validator {
 	public static boolean isValidRowClones(List<Clone> rowClones) {
 		for (Clone clone: rowClones) {    		
     		for (Event e: clone.getCloneInput()) {
+    			// Skip detailed formulas (contain :: or ->) - these are validated separately by DetailedFormulaParser
+    			if (e.getEventCode().contains("::") || e.getEventCode().contains("->")) {
+    				continue;
+    			}
+    			
     			if (!e.getNature().isEmpty() && !e.isUncertainEvent() && !isValidEvent(e)) {
     				return false;
     			} else if (e.getNature().isEmpty() && !e.isUncertainEvent()) {
@@ -221,12 +226,31 @@ public class Validator {
 					isValid = false;
 				} else if (!isValidChr(chrList.get(0)) || !isValidChr(chrList.get(1))) {
 					isValid = false;
-				} else if (breakpoints.get(0).size() != 1 || breakpoints.get(1).size() != 1) {
+				} else if (breakpoints.size() != 1) {
+					// For dicentric, should have exactly ONE breakpoint list
 					isValid = false;
-				} else if (!isValidChrBreakpoint(breakpointsFullName.get(0).get(0)) || !isValidChrBreakpoint(breakpointsFullName.get(1).get(0))) {
-					isValid = false;
+				} else if (breakpoints.get(0).size() == 2) {
+					// Single breakpoint pair (q10;q10) - valid for centric fusion/Robertsonian-type
+					// Both breakpoints are at the centromere region
+					if (!isValidChrBreakpoint(breakpointsFullName.get(0).get(0)) || 
+						!isValidChrBreakpoint(breakpointsFullName.get(0).get(1))) {
+						isValid = false;
+					} else {
+						isValid = true;
+					}
+				} else if (breakpoints.get(0).size() == 4) {
+					// Four breakpoints: two for each chromosome
+					// Format: (bp1;bp2;bp3;bp4) where bp1,bp2 are for chr1 and bp3,bp4 for chr2
+					if (!isValidChrBreakpoint(breakpointsFullName.get(0).get(0)) || 
+						!isValidChrBreakpoint(breakpointsFullName.get(0).get(1)) ||
+						!isValidChrBreakpoint(breakpointsFullName.get(0).get(2)) ||
+						!isValidChrBreakpoint(breakpointsFullName.get(0).get(3))) {
+						isValid = false;
+					} else {
+						isValid = true;
+					}
 				} else {
-					isValid = true;
+					isValid = false;
 				}
 				break;
 			}
@@ -572,8 +596,6 @@ public class Validator {
 							isValid = false;
 						} else if (breakpoints.get(0).size() != 1 || breakpoints.get(1).size() != 1) {
 							isValid = false;
-						} else if (!isValidCenList(e.getBreakpointsFullName(chrList, breakpoints))) {
-							isValid = false;
 						} else if (((DerEvent)e).getSubevents().size() > 0) {
 							for (Event subevent: ((DerEvent)e).getSubevents()) {
 								if (!subevent.isUncertainEvent() && !isValidGenericSubevent(subevent)) {
@@ -581,23 +603,30 @@ public class Validator {
 								}
 							}							
 							if (!isUncerntainDer((DerEvent)e)) {
-								if (!chrList.get(0).equals(chrList.get(1))) {
-									if (!new DicDerivativeValidationDifferentDerChrWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome().isValidDerivativeChr()) {
-										return false;
-									}
-								} else {
-									List<List<String>> derCens = e.getBreakpointsFullName(chrList, breakpoints);
-									if (!getChrArm(derCens.get(0).get(0)).equals(getChrArm(derCens.get(1).get(0)))) {
+								// Only apply DicDerivativeValidation if both breakpoints are centromeric
+								// Otherwise, treat it as a regular derivative chromosome
+								List<List<String>> derBreakpoints = e.getBreakpointsFullName(chrList, breakpoints);
+								boolean hasCentromericBreakpoints = isValidCenList(derBreakpoints);
+								
+								if (hasCentromericBreakpoints) {
+									if (!chrList.get(0).equals(chrList.get(1))) {
 										if (!new DicDerivativeValidationDifferentDerChrWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome().isValidDerivativeChr()) {
 											return false;
 										}
 									} else {
-										if (!new DicDerivativeValidationSameDerChrSameArmWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome().isValidDerivativeChr()) {
-											return false;
+										if (!getChrArm(derBreakpoints.get(0).get(0)).equals(getChrArm(derBreakpoints.get(1).get(0)))) {
+											if (!new DicDerivativeValidationDifferentDerChrWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome().isValidDerivativeChr()) {
+												return false;
+											}
+										} else {
+											if (!new DicDerivativeValidationSameDerChrSameArmWithBreakpoints((DerEvent)e).getDicDerivativeValidationOutcome().isValidDerivativeChr()) {
+												return false;
+											}
 										}
 									}
 								}
-							}							
+								// Non-centromeric breakpoints: skip dicentric validation
+							}						
 							isValid = true;
 						} else {
 							isValid = true; // e.g. der(1;7)(q10;p10)

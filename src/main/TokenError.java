@@ -20,7 +20,28 @@ public class TokenError {
 	}
 	
 	public String toString(String input) {
-		return input.substring(offsetStart, offsetStart + length) + ": " + message;
+		try {
+			// Safely extract substring, ensuring indices don't exceed input length
+			int start = Math.max(0, offsetStart);
+			int end = Math.min(input.length(), offsetStart + length);
+			
+			if (start >= input.length()) {
+				// If offset is beyond input, show the full input (truncated if too long)
+				String display = input.length() > 100 ? input.substring(Math.max(0, input.length() - 100)) : input;
+				return "[Full input: " + display + "]: " + message;
+			}
+			
+			// Show the error context: substring with some padding
+			String errorPart = input.substring(start, end);
+			if (errorPart.length() > 100) {
+				errorPart = errorPart.substring(0, 100) + "...";
+			}
+			return errorPart + ": " + message;
+		} catch (Exception e) {
+			// Fallback: show the full input if something goes wrong
+			String display = input.length() > 100 ? input.substring(Math.max(0, input.length() - 100)) : input;
+			return "[Full input near error: " + display + "]: " + message;
+		}
 	}
 
 	public int getOffsetStart() {

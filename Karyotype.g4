@@ -843,13 +843,14 @@ chrListElements
 incorrectChrListElements: chr ((';'|',') chr)+ ;                     
 breakpointsList locals [String s = "", int l = 0]
 : '(' breakpointsListElements ')'   # correctBreakpointsList
-| breakpointsListElements ')' 
+| '(' detailedFormula ')'   # detailedBreakpointsList
+| breakpointsListElements ')'
   {
   	$s = $breakpointsListElements.text;
   	$l = $s.length() + 1;
   	notifyErrorListeners($l + "|Missing '(' for breakpoints list '" + $s + "'");
   }
-  # incorrectBreakpointsList	
+  # incorrectBreakpointsList
 | '(' breakpointsListElements
   {
   	$s = $breakpointsListElements.text;
@@ -857,14 +858,14 @@ breakpointsList locals [String s = "", int l = 0]
   	notifyErrorListeners($l + "|Missing ')' for breakpoints list '" + $s + "'");
   }
   # incorrectBreakpointsList
-| breakpointsListElements   
+| breakpointsListElements
   {
   	$s = $breakpointsListElements.text;
   	$l = $s.length();
   	notifyErrorListeners($l + "|Missing '()' for breakpoints list '" + $s + "'");
   }
   # incorrectBreakpointsList
-| incorrectLeftParenthesis breakpointsListElements incorrectRightParenthesis 
+| incorrectLeftParenthesis breakpointsListElements incorrectRightParenthesis
   {
   	$s = $breakpointsListElements.text;
   	$l = $s.length();
@@ -876,7 +877,7 @@ breakpointsList locals [String s = "", int l = 0]
   	}
   	notifyErrorListeners($l + "|Wrong bracket format for breakpoints list '" + $s + "', expecting '()'");
   }
-  # incorrectBreakpointsList 
+  # incorrectBreakpointsList
 ;
 breakpointsListElements
 : breakpointsInOneChr (';' breakpointsInOneChr)*  
@@ -927,8 +928,9 @@ rChrList locals [String s = "", int l = 0]
   # incorrectRChrList
 ;
 rBreakpointsList locals [String s = "", int l = 0]
-: '(' breakpointsListElements ')'   # correctRBreakpointsList 
-| breakpointsListElements ')' 
+: '(' breakpointsListElements ')'   # correctRBreakpointsList
+| '(' detailedFormula ')'   # detailedRBreakpointsList
+| breakpointsListElements ')'
   {
   	$s = $breakpointsListElements.text;
   	$l = $s.length() + 1;
@@ -942,14 +944,14 @@ rBreakpointsList locals [String s = "", int l = 0]
   	notifyErrorListeners($l + "|Missing ')' for breakpoints list '" + $s + "'");
   }
   # incorrectRBreakpointsList
-| breakpointsListElements   
+| breakpointsListElements
   {
   	$s = $breakpointsListElements.text;
   	$l = $s.length();
   	notifyErrorListeners($l + "|Missing '()' for breakpoints list '" + $s + "'");
   }
   # incorrectRBreakpointsList
-| incorrectLeftParenthesis breakpointsListElements incorrectRightParenthesis 
+| incorrectLeftParenthesis breakpointsListElements incorrectRightParenthesis
   {
   	$s = $breakpointsListElements.text;
   	$l = $s.length();
@@ -1101,10 +1103,28 @@ cen: QUES? arm integer | QUES integer | QUES ;
 chr: QUES? (integer | sex) | digit QUES digit? | QUES ;
 chrNum: numRangeTypeI | QUES+ ;
 cp: ('c' | 'C') ('p'  | 'P');
-derBreakpoints: cen ;
+derBreakpoints: cen | detailedFormula ;
 derChr: QUES? (integer | sex) | digit QUES digit? | QUES ;
-derId: ('i' | 'I') ('d' | 'D') ('e' | 'E') ('r' | 'R') 
+derId: ('i' | 'I') ('d' | 'D') ('e' | 'E') ('r' | 'R')
      | ('d' | 'D') ('e' | 'E') ('r' | 'R') ;
+
+/** Detailed formula syntax for derivative chromosomes
+ *  Examples:
+ *  - der(13)(13pter->13q10::15q10->15q21::13q14->13qter)
+ *  - dic(9;17)(9p23->9q34::17p12->17qter)
+ *  - r(7)(::7q11->7q31::)
+ */
+detailedFormula: detailedSegmentList ;
+detailedSegmentList: COLON COLON? detailedSegment (COLON COLON detailedSegment)* COLON COLON?
+                   | detailedSegment (COLON COLON detailedSegment)*
+                   ;
+detailedSegment: detailedBreakpoint ARROW detailedBreakpoint
+               | ('h' | 'H') ('s' | 'S') ('r' | 'R')  // HSR marker
+               ;
+detailedBreakpoint: chr? arm ('t' | 'T') ('e' | 'E') ('r' | 'R')  // pter/qter
+                  | chr? band subband?                             // normal band
+                  | QUES chr? band subband?                       // uncertain band
+                  ;
 digit: '0' | POSITIVEDIGIT ;
 dminNum: numRangeTypeI | numRangeTypeIII ;
 gainChr: integer | sex ;
@@ -1177,5 +1197,7 @@ MINUS: '-' ;
 PLUS: '+' ;
 QUES: '?' ;
 LETTER: [a-zA-Z] ;
+ARROW: '->' ;
+COLON: ':' ;
 
 WS : [ \t\r\n]+ -> skip ;

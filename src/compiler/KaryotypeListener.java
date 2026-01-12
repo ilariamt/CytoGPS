@@ -785,6 +785,18 @@ public interface KaryotypeListener extends ParseTreeListener {
 	 */
 	void exitCorrectBreakpointsList(KaryotypeParser.CorrectBreakpointsListContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code detailedBreakpointsList}
+	 * labeled alternative in {@link KaryotypeParser#breakpointsList}.
+	 * @param ctx the parse tree
+	 */
+	void enterDetailedBreakpointsList(KaryotypeParser.DetailedBreakpointsListContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code detailedBreakpointsList}
+	 * labeled alternative in {@link KaryotypeParser#breakpointsList}.
+	 * @param ctx the parse tree
+	 */
+	void exitDetailedBreakpointsList(KaryotypeParser.DetailedBreakpointsListContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code incorrectBreakpointsList}
 	 * labeled alternative in {@link KaryotypeParser#breakpointsList}.
 	 * @param ctx the parse tree
@@ -876,6 +888,18 @@ public interface KaryotypeListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitCorrectRBreakpointsList(KaryotypeParser.CorrectRBreakpointsListContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code detailedRBreakpointsList}
+	 * labeled alternative in {@link KaryotypeParser#rBreakpointsList}.
+	 * @param ctx the parse tree
+	 */
+	void enterDetailedRBreakpointsList(KaryotypeParser.DetailedRBreakpointsListContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code detailedRBreakpointsList}
+	 * labeled alternative in {@link KaryotypeParser#rBreakpointsList}.
+	 * @param ctx the parse tree
+	 */
+	void exitDetailedRBreakpointsList(KaryotypeParser.DetailedRBreakpointsListContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code incorrectRBreakpointsList}
 	 * labeled alternative in {@link KaryotypeParser#rBreakpointsList}.
@@ -1106,6 +1130,46 @@ public interface KaryotypeListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitDerId(KaryotypeParser.DerIdContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link KaryotypeParser#detailedFormula}.
+	 * @param ctx the parse tree
+	 */
+	void enterDetailedFormula(KaryotypeParser.DetailedFormulaContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link KaryotypeParser#detailedFormula}.
+	 * @param ctx the parse tree
+	 */
+	void exitDetailedFormula(KaryotypeParser.DetailedFormulaContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link KaryotypeParser#detailedSegmentList}.
+	 * @param ctx the parse tree
+	 */
+	void enterDetailedSegmentList(KaryotypeParser.DetailedSegmentListContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link KaryotypeParser#detailedSegmentList}.
+	 * @param ctx the parse tree
+	 */
+	void exitDetailedSegmentList(KaryotypeParser.DetailedSegmentListContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link KaryotypeParser#detailedSegment}.
+	 * @param ctx the parse tree
+	 */
+	void enterDetailedSegment(KaryotypeParser.DetailedSegmentContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link KaryotypeParser#detailedSegment}.
+	 * @param ctx the parse tree
+	 */
+	void exitDetailedSegment(KaryotypeParser.DetailedSegmentContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link KaryotypeParser#detailedBreakpoint}.
+	 * @param ctx the parse tree
+	 */
+	void enterDetailedBreakpoint(KaryotypeParser.DetailedBreakpointContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link KaryotypeParser#detailedBreakpoint}.
+	 * @param ctx the parse tree
+	 */
+	void exitDetailedBreakpoint(KaryotypeParser.DetailedBreakpointContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link KaryotypeParser#digit}.
 	 * @param ctx the parse tree

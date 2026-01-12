@@ -18,3 +18,5 @@ pom.xml
 DESCRIPTOR.md
 *.md
 *.log
+
+workspace.code-workspace

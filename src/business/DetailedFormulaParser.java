@@ -29,20 +29,35 @@ public class DetailedFormulaParser {
 
     /**
      * Check if input contains detailed formula syntax
+     * Supports: der(...), dic(...), r(...)
      */
     public static boolean isDetailedFormula(String input) {
-        // Pattern: der(X)(...pter->...::...->...qter...)
-        // or der(X)(...->...::...->...)
-        Pattern pattern = Pattern.compile("der\\([^)]+\\)\\([^)]*(?:->|::)[^)]*\\)");
+        // Look for patterns: der(...)(...)  or dic(...)(...)  or r(...)(...) 
+        // with -> or :: inside the second set of parentheses
+        Pattern pattern = Pattern.compile("(?:der|dic|r)\\([^)]*\\)\\([^)]*(?:->|::)[^)]*\\)");
         return pattern.matcher(input).find();
     }
 
     /**
      * Parse a detailed formula and extract LGF
      * Input: "46,XX,der(13)(13pter->13q10::15q10->15q21::13q14->13qter)"
+     * Also supports: dic(X;Y)(...), r(X)(...)
      * Output: BiologicalOutcome with LGF data
      */
     public BiologicalOutcome parseDetailedFormula(String input) {
+        // Preprocess: Strip leading/trailing quotes (common in database exports)
+        input = input.trim();
+        if (input.startsWith("\"") && input.endsWith("\"")) {
+            input = input.substring(1, input.length() - 1);
+        }
+
+        // Preprocess: Strip '?' symbols representing uncertainty
+        // Example: "11?q21" -> "11q21"
+        boolean containsQuestionMark = input.contains("?");
+        if (containsQuestionMark) {
+            input = input.replaceAll("\\?", "");
+        }
+
         // Initialize LGF
         List<String> uncertainEventsList = new ArrayList<>();
         List<String> derDetailedSystem = new ArrayList<>();
@@ -54,16 +69,21 @@ public class DetailedFormulaParser {
 
         BiologicalOutcome b = new BiologicalOutcome(initKaryotypeLGF, uncertainEventsList, derDetailedSystem);
 
-        // Extract detailed derivative formulas
-        Pattern derPattern = Pattern.compile("der\\(([^)]+)\\)\\(([^)]+)\\)");
-        Matcher derMatcher = derPattern.matcher(input);
-
-        while (derMatcher.find()) {
-            String baseChrSpec = derMatcher.group(1);
-            String detailedFormula = derMatcher.group(2);
-
+        // Extract detailed derivative formulas using balanced parenthesis parsing
+        // This handles nested parentheses correctly
+        List<String> detailedFormulas = extractDetailedFormulas(input);
+        
+        for (String formula : detailedFormulas) {
+            // Extract baseChrSpec and detailedFormula from formula like "der(13)(13pter->...)"
+            int firstParen = formula.indexOf('(');
+            int secondParen = formula.indexOf('(', firstParen + 1);
+            if (firstParen < 0 || secondParen < 0) continue;
+            
+            String baseChrSpec = formula.substring(firstParen + 1, secondParen - 1);
+            String detailedFormula = formula.substring(secondParen + 1, formula.lastIndexOf(')'));
+            
             // Add to detailed system
-            derDetailedSystem.add("der(" + baseChrSpec + ")(" + detailedFormula + ")");
+            derDetailedSystem.add(formula);
 
             // Parse base chromosome(s)
             // Can be single chr: der(13) or dicentric: der(13;15)
@@ -261,9 +281,45 @@ public class DetailedFormulaParser {
 
         // Use parseEvent's mapping to find the index
         Integer index = parseEvent.getChrToIndexMap().get(band);
+
+        // If exact match not found, try fuzzy matching
+        if (index == null) {
+            index = findClosestBandIndex(band);
+        }
+
         if (index != null) {
             karyotypeFusionOutcome.set(index, karyotypeFusionOutcome.get(index) + 1);
         }
+    }
+
+    /**
+     * Find the closest band index when exact match not found
+     * Handles cases like "15q21" when only "15q21.1", "15q21.2", etc. exist
+     */
+    private Integer findClosestBandIndex(String band) {
+        java.util.Map<String, Integer> chrToIndexMap = parseEvent.getChrToIndexMap();
+
+        // Try with .1 suffix (most common)
+        Integer index = chrToIndexMap.get(band + ".1");
+        if (index != null) {
+            return index;
+        }
+
+        // Try without any decimal
+        String bandBase = band.replaceAll("\\..*", "");
+        index = chrToIndexMap.get(bandBase);
+        if (index != null) {
+            return index;
+        }
+
+        // Search for any band that starts with this pattern
+        for (String key : chrToIndexMap.keySet()) {
+            if (key.startsWith(band)) {
+                return chrToIndexMap.get(key);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -426,6 +482,73 @@ public class DetailedFormulaParser {
 
         // Fallback: compare as strings
         return bp1.compareTo(bp2);
+    }
+
+    /**
+     * Extract all detailed formulas from input string using balanced parenthesis parsing.
+     * This correctly handles nested parentheses and multiple detailed formulas.
+     * 
+     * Examples:
+     * - "der(13)(13pter->13q10::15q10->15q21::13q14->13qter)" -> [der(13)(13pter->13q10::15q10->15q21::13q14->13qter)]
+     * - "der(11)(11pter->11q11::22q11->22q13::11q22->11qter),t(9;14)" -> [der(11)(11pter->11q11::22q11->22q13::11q22->11qter)]
+     */
+    private static List<String> extractDetailedFormulas(String input) {
+        List<String> detailedFormulas = new ArrayList<>();
+        
+        // Find all der/dic/r patterns with balanced parentheses
+        // Only extract formulas that contain -> or :: (actual detailed formulas)
+        int i = 0;
+        while (i < input.length()) {
+            // Look for der, dic, or r at position i
+            if (i <= input.length() - 3 && 
+                ((input.startsWith("der(", i)) || 
+                 (input.startsWith("dic(", i)) || 
+                 (input.startsWith("r(", i)))) {
+                
+                // Find the start of the formula
+                int formulaStart = i;
+                
+                // Skip past "der(" or "dic(" or "r("
+                int j = i + (input.startsWith("r(", i) ? 2 : 3);
+                
+                // Find matching ) for the first set of parentheses (base chromosome spec)
+                int parenCount = 1;
+                while (j < input.length() && parenCount > 0) {
+                    if (input.charAt(j) == '(') parenCount++;
+                    else if (input.charAt(j) == ')') parenCount--;
+                    j++;
+                }
+                
+                // Now j is right after the first )
+                // Check if the next character is (
+                if (j < input.length() && input.charAt(j) == '(') {
+                    // Find matching ) for the second set of parentheses (detailed formula)
+                    j++; // Skip the (
+                    parenCount = 1;
+                    while (j < input.length() && parenCount > 0) {
+                        if (input.charAt(j) == '(') parenCount++;
+                        else if (input.charAt(j) == ')') parenCount--;
+                        j++;
+                    }
+                    
+                    // Extract the complete formula
+                    String formula = input.substring(formulaStart, j);
+                    
+                    // Only add if it contains -> or :: (actual detailed formula)
+                    if (formula.contains("->") || formula.contains("::")) {
+                        detailedFormulas.add(formula);
+                    }
+                    
+                    i = j;
+                } else {
+                    i++;
+                }
+            } else {
+                i++;
+            }
+        }
+        
+        return detailedFormulas;
     }
 
     /**
