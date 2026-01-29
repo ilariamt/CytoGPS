@@ -2,7 +2,11 @@ package business;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,9 +23,12 @@ import java.util.regex.Pattern;
  * - Multiple fragments from same chromosome
  * - Telomere markers: pter, qter
  * - Sub-band precision: 15q21.1, 15q21.2, etc.
+ * - DUPLICATED SEGMENTS: When same chromosome regions appear multiple times, 
+ *   the duplicated regions are marked as GAIN
  *
  * @author ilariamt
  * Date: January 02, 2026
+ * Updated: January 27, 2026 - Fixed duplicated segment detection and reversed direction handling
  */
 public class DetailedFormulaParser {
 
@@ -77,6 +84,7 @@ public class DetailedFormulaParser {
             // Extract baseChrSpec and detailedFormula from formula like "der(13)(13pter->...)"
             int firstParen = formula.indexOf('(');
             int secondParen = formula.indexOf('(', firstParen + 1);
+            
             if (firstParen < 0 || secondParen < 0) continue;
             
             String baseChrSpec = formula.substring(firstParen + 1, secondParen - 1);
@@ -111,6 +119,8 @@ public class DetailedFormulaParser {
      * - HSR regions: ...::hsr::...
      * - Isochromosomes: i(13)(q10) in detailed formulas
      * - Multiple fragments from same chromosome
+     * - DUPLICATED SEGMENTS: When same chromosome regions appear multiple times,
+     *   the extra occurrences are marked as GAIN
      */
     private void parseDetailedSegments(String formula, String baseChr, List<List<Integer>> karyotypeLGF) {
         List<Integer> karyotypeLossOutcome = karyotypeLGF.get(0);
@@ -125,6 +135,9 @@ public class DetailedFormulaParser {
         if (isRing) {
             cleanedFormula = formula.substring(2, formula.length() - 2);
         }
+
+        // Track band occurrences from base chromosome to detect duplications
+        Map<String, Integer> baseChrBandCount = new HashMap<>();
 
         // Split by fusion points (::)
         String[] segments = cleanedFormula.split("::");
@@ -155,10 +168,18 @@ public class DetailedFormulaParser {
                 String segmentChr = extractChr(startPoint);
 
                 if (segmentChr.equals(baseChr)) {
-                    // Segment from base chromosome - normal (no gain)
-                    // But mark fusion points
+                    // Segment from base chromosome
+                    // Mark fusion points
                     markFusionPoint(karyotypeFusionOutcome, startPoint);
                     markFusionPoint(karyotypeFusionOutcome, endPoint);
+                    
+                    // Track bands to detect duplications
+                    List<String> bandsInSegment = BandRangeCalculator.getAllBandsBetween(startPoint, endPoint);
+                    for (String band : bandsInSegment) {
+                        String bandKey = band.toLowerCase();
+                        int count = baseChrBandCount.getOrDefault(bandKey, 0);
+                        baseChrBandCount.put(bandKey, count + 1);
+                    }
                 } else {
                     // Segment from different chromosome - this is a GAIN
                     recordSegmentGain(karyotypeGainOutcome, karyotypeFusionOutcome, startPoint, endPoint);
@@ -172,9 +193,21 @@ public class DetailedFormulaParser {
             }
         }
 
-        // Detect losses: any part of base chromosome NOT in the formula
-        // For ring chromosomes, losses are calculated the same way
-        detectLosses(cleanedFormula, baseChr, karyotypeLossOutcome, isRing);
+        // Mark duplicated bands from base chromosome as GAIN
+        for (Map.Entry<String, Integer> entry : baseChrBandCount.entrySet()) {
+            if (entry.getValue() > 1) {
+                // Band appears more than once = duplication = GAIN
+                Integer index = parseEvent.getChrToIndexMap().get(entry.getKey());
+                if (index != null) {
+                    // Mark (count - 1) as gains (one occurrence is normal, extras are gained)
+                    int gainCount = entry.getValue() - 1;
+                    karyotypeGainOutcome.set(index, karyotypeGainOutcome.get(index) + gainCount);
+                }
+            }
+        }
+
+        // Detect losses: any part of base chromosome NOT covered by any segment
+        detectLossesImproved(cleanedFormula, baseChr, karyotypeLossOutcome, baseChrBandCount.keySet());
     }
 
     /**
@@ -185,6 +218,7 @@ public class DetailedFormulaParser {
      * - Multiple base chromosomes (e.g., 13 and 15 in der(13;15))
      * - Losses are reported on ALL base chromosomes
      * - Material from non-base chromosomes is still gained
+     * - DUPLICATED SEGMENTS from base chromosomes are marked as GAIN
      */
     private void parseDetailedSegmentsDicentric(String formula, String[] baseChrs, List<List<Integer>> karyotypeLGF) {
         List<Integer> karyotypeLossOutcome = karyotypeLGF.get(0);
@@ -201,6 +235,12 @@ public class DetailedFormulaParser {
         // Trim all base chromosomes
         for (int i = 0; i < baseChrs.length; i++) {
             baseChrs[i] = baseChrs[i].trim();
+        }
+
+        // Track band occurrences for EACH base chromosome to detect duplications
+        Map<String, Map<String, Integer>> baseChrBandCounts = new HashMap<>();
+        for (String baseChr : baseChrs) {
+            baseChrBandCounts.put(baseChr, new HashMap<>());
         }
 
         // Split by fusion points (::)
@@ -227,6 +267,15 @@ public class DetailedFormulaParser {
                 for (String baseChr : baseChrs) {
                     if (segmentChr.equals(baseChr)) {
                         isFromBaseChr = true;
+                        
+                        // Track bands to detect duplications
+                        List<String> bandsInSegment = BandRangeCalculator.getAllBandsBetween(startPoint, endPoint);
+                        Map<String, Integer> bandCount = baseChrBandCounts.get(baseChr);
+                        for (String band : bandsInSegment) {
+                            String bandKey = band.toLowerCase();
+                            int count = bandCount.getOrDefault(bandKey, 0);
+                            bandCount.put(bandKey, count + 1);
+                        }
                         break;
                     }
                 }
@@ -247,9 +296,26 @@ public class DetailedFormulaParser {
             }
         }
 
+        // Mark duplicated bands from each base chromosome as GAIN
+        for (String baseChr : baseChrs) {
+            Map<String, Integer> bandCount = baseChrBandCounts.get(baseChr);
+            for (Map.Entry<String, Integer> entry : bandCount.entrySet()) {
+                if (entry.getValue() > 1) {
+                    // Band appears more than once = duplication = GAIN
+                    Integer index = parseEvent.getChrToIndexMap().get(entry.getKey());
+                    if (index != null) {
+                        // Mark (count - 1) as gains
+                        int gainCount = entry.getValue() - 1;
+                        karyotypeGainOutcome.set(index, karyotypeGainOutcome.get(index) + gainCount);
+                    }
+                }
+            }
+        }
+
         // Detect losses for EACH base chromosome
         for (String baseChr : baseChrs) {
-            detectLosses(cleanedFormula, baseChr, karyotypeLossOutcome, isRing);
+            Set<String> coveredBands = baseChrBandCounts.get(baseChr).keySet();
+            detectLossesImproved(cleanedFormula, baseChr, karyotypeLossOutcome, coveredBands);
         }
     }
 
@@ -347,93 +413,35 @@ public class DetailedFormulaParser {
     }
 
     /**
-     * Detect which parts of the base chromosome are lost (not in the formula)
-     *
-     * CRITICAL RULE: Only the chromosome in der(X) gets losses reported!
-     * - der(13) → only report losses on chr 13
-     * - der(13;15) → report losses on both chr 13 AND chr 15 (dicentric)
-     *
+     * IMPROVED loss detection that uses the set of covered bands directly
+     * instead of gap detection between segments (which can miss overlapping segments)
+     * 
      * Algorithm:
-     * 1. Extract all segments from the base chromosome
-     * 2. Sort segments by position (pter → qter)
-     * 3. Find GAPS between consecutive segments
-     * 4. Report bands in gaps as losses
-     *
-     * Example: der(13)(13pter->13q10::15q10->15q21::13q14->13qter)
-     * - Segments from chr 13: [13pter->13q10, 13q14->13qter]
-     * - Gap: 13q10 to 13q14
-     * - Loss: all bands between 13q10 and 13q14
-     *
-     * Ring chromosome handling:
-     * - For rings (::segment::), losses are still calculated normally
-     * - The ring structure doesn't change what material is missing
+     * 1. Get ALL bands for the base chromosome (both p and q arms)
+     * 2. Mark as LOST any band that is NOT in the coveredBands set
      */
-    private void detectLosses(String formula, String baseChr, List<Integer> karyotypeLossOutcome, boolean isRing) {
-        // Step 1: Extract all segments from baseChr
-        List<Segment> baseSegments = new ArrayList<>();
-
-        String[] segments = formula.split("::");
-        for (String segment : segments) {
-            segment = segment.trim();
-
-            // Skip ring chromosome markers or empty segments
-            if (segment.isEmpty() || segment.equals("hsr")) {
-                continue;
-            }
-
-            // Parse segment: "13pter->13q10" or "13q14->13qter"
-            String[] parts = segment.split("->");
-            if (parts.length == 2) {
-                String startPoint = parts[0].trim();
-                String endPoint = parts[1].trim();
-                String segmentChr = extractChr(startPoint);
-
-                // Only collect segments from the base chromosome
-                if (segmentChr.equals(baseChr)) {
-                    baseSegments.add(new Segment(startPoint, endPoint));
+    private void detectLossesImproved(String formula, String baseChr, List<Integer> karyotypeLossOutcome, Set<String> coveredBands) {
+        // Get all bands for both p and q arms of the base chromosome
+        List<String> allPBands = BandRangeCalculator.getAllBandsInArm(baseChr + "p");
+        List<String> allQBands = BandRangeCalculator.getAllBandsInArm(baseChr + "q");
+        
+        // Check each band - if not covered, it's lost
+        for (String band : allPBands) {
+            if (!coveredBands.contains(band.toLowerCase())) {
+                Integer index = parseEvent.getChrToIndexMap().get(band.toLowerCase());
+                if (index != null) {
+                    karyotypeLossOutcome.set(index, karyotypeLossOutcome.get(index) + 1);
                 }
             }
         }
-
-        // If no segments from base chromosome, the entire chromosome is lost
-        if (baseSegments.isEmpty()) {
-            markEntireChromosomeLoss(baseChr, karyotypeLossOutcome);
-            return;
-        }
-
-        // Step 2: Sort segments by chromosomal position
-        baseSegments.sort((s1, s2) -> compareBreakpoints(s1.start, s2.start));
-
-        // Step 3 & 4: Find gaps and mark losses
-
-        // Check if p arm start is missing (gap before first segment)
-        Segment firstSegment = baseSegments.get(0);
-        if (!firstSegment.start.contains("pter")) {
-            // There's a gap from pter to the start of first segment
-            String pArmStart = baseChr + "pter";
-            List<String> lostBands = BandRangeCalculator.getAllBandsBetween(pArmStart, firstSegment.start);
-            markBandsAsLost(lostBands, karyotypeLossOutcome);
-        }
-
-        // Check gaps between consecutive segments
-        for (int i = 0; i < baseSegments.size() - 1; i++) {
-            Segment current = baseSegments.get(i);
-            Segment next = baseSegments.get(i + 1);
-
-            // If current.end != next.start, there's a gap
-            if (!current.end.equals(next.start)) {
-                List<String> lostBands = BandRangeCalculator.getAllBandsBetween(current.end, next.start);
-                markBandsAsLost(lostBands, karyotypeLossOutcome);
+        
+        for (String band : allQBands) {
+            if (!coveredBands.contains(band.toLowerCase())) {
+                Integer index = parseEvent.getChrToIndexMap().get(band.toLowerCase());
+                if (index != null) {
+                    karyotypeLossOutcome.set(index, karyotypeLossOutcome.get(index) + 1);
+                }
             }
-        }
-
-        // Check if q arm end is missing (gap after last segment)
-        Segment lastSegment = baseSegments.get(baseSegments.size() - 1);
-        if (!lastSegment.end.contains("qter")) {
-            // There's a gap from end of last segment to qter
-            String qArmEnd = baseChr + "qter";
-            List<String> lostBands = BandRangeCalculator.getAllBandsBetween(lastSegment.end, qArmEnd);
-            markBandsAsLost(lostBands, karyotypeLossOutcome);
         }
     }
 
