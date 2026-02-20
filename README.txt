@@ -4,7 +4,7 @@ Note: The current code has not been fully cleaned. A section of code has not bee
 
 
 
-How to Run the CytoGPS Software
+### How to Run the CytoGPS Software
 
 After downloading the code and opening the project, find the file Run.java within the main package. Replace the six placeholders in the code with the following values:
 i) The "[path_to_the_karyotype_input_file]" is where your karyotypes input is saved, e.g. "C:\\Karyotype_samples.txt"
@@ -19,9 +19,40 @@ After you run the software, the console will print out the two timestamps; one i
 	Complete
 When you see this, you should be able to find the three output files written and saved into the folder you identify: the JSON output, the aggregate LGF output, and the summary statistics output.
 
+### HOW TO COMPILE CYTOGPS INTO A ready-to-use JAR
+# generate ANTLR parser
+java -jar resource/antlr-4.7-complete.jar -visitor -o src/compiler Karyotype.g4
+rm -rf out
+# create directories                                                            
+mkdir out
+#find all Java files
+find src -name "*.java" > sources.txt
+# compile with javac
+javac -cp "resource/antlr-4.7-complete.jar" -d out @sources.txt
+rm -rf build
+# create build directories                                                           
+mkdir build
+mkdir build/classes
+mkdir build/lib
+# copy compiled files
+cp -R out/* build/classes/
+cp resource/antlr-4.7-complete.jar build/lib/
+cd build/classes
+# extract ANTLR jar
+jar xf ../lib/antlr-4.7-complete.jar
+cd ../..
+# create manifest
+echo "Main-Class: main.Run" > MANIFEST.MF
+echo "" >> MANIFEST.MF
+# create jar
+jar cfm cytogps.jar MANIFEST.MF -C build/classes .
+
+#usage
+java -jar cytogps.jar ./input_directory/
 
 
-Instructions on the Karyotypes Input File
+
+### Instructions on the Karyotypes Input File
 
 We suggest you save all the karyotypes input in a .txt file, following the instructions as follows:
 i) Each karyotype should be on a seperate line.
