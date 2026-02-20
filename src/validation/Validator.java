@@ -226,31 +226,12 @@ public class Validator {
 					isValid = false;
 				} else if (!isValidChr(chrList.get(0)) || !isValidChr(chrList.get(1))) {
 					isValid = false;
-				} else if (breakpoints.size() != 1) {
-					// For dicentric, should have exactly ONE breakpoint list
+				} else if (breakpoints.get(0).size() != 1 || breakpoints.get(1).size() != 1) {
 					isValid = false;
-				} else if (breakpoints.get(0).size() == 2) {
-					// Single breakpoint pair (q10;q10) - valid for centric fusion/Robertsonian-type
-					// Both breakpoints are at the centromere region
-					if (!isValidChrBreakpoint(breakpointsFullName.get(0).get(0)) || 
-						!isValidChrBreakpoint(breakpointsFullName.get(0).get(1))) {
-						isValid = false;
-					} else {
-						isValid = true;
-					}
-				} else if (breakpoints.get(0).size() == 4) {
-					// Four breakpoints: two for each chromosome
-					// Format: (bp1;bp2;bp3;bp4) where bp1,bp2 are for chr1 and bp3,bp4 for chr2
-					if (!isValidChrBreakpoint(breakpointsFullName.get(0).get(0)) || 
-						!isValidChrBreakpoint(breakpointsFullName.get(0).get(1)) ||
-						!isValidChrBreakpoint(breakpointsFullName.get(0).get(2)) ||
-						!isValidChrBreakpoint(breakpointsFullName.get(0).get(3))) {
-						isValid = false;
-					} else {
-						isValid = true;
-					}
+				} else if (!isValidChrBreakpoint(breakpointsFullName.get(0).get(0)) || !isValidChrBreakpoint(breakpointsFullName.get(1).get(0))) {
+					isValid = false;
 				} else {
-					isValid = false;
+					isValid = true;
 				}
 				break;
 			}
