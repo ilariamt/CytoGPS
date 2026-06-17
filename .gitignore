@@ -19,4 +19,4 @@ DESCRIPTOR.md
 *.md
 *.log
 
-workspace.code-workspace
+workspace.code-workspacebuild/
