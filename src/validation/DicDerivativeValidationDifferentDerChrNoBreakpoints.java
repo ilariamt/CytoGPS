@@ -29,7 +29,8 @@ public class DicDerivativeValidationDifferentDerChrNoBreakpoints extends Derivat
 	List<List<String>> derChr1GainedSegments = new ArrayList<>();
 	
 	public DicDerivativeValidationDifferentDerChrNoBreakpoints() {}
-	public DicDerivativeValidationDifferentDerChrNoBreakpoints(DerEvent e) {		
+	public DicDerivativeValidationDifferentDerChrNoBreakpoints(DerEvent e) {
+		isExtraCopy = e.isExtraCopy();
 		derChr0 = e.getChrList().get(0);
 		derChr1 = e.getChrList().get(1);
 		commonMarkSet.add("M0");
@@ -2615,7 +2616,49 @@ public class DicDerivativeValidationDifferentDerChrNoBreakpoints extends Derivat
     public List<List<Integer>> getDerKaryotypeLGF() {
     	List<List<Integer>> derKaryotypeLGF = new ArrayList<>();
     	int[] chrsOffset = getChrsOffset(chrArmArrays);
-    	
+
+    	if (isExtraCopy) {
+    		// +der(X;Y): add gains only for bands retained in the der from both chromosomes.
+    		// Retained = complement of what markSpecificLossGain["M0"/"M1"] marks as given away.
+    		// No loss is written — losses from other events are unaffected.
+    		List<String> derMarkList2 = Arrays.asList("M0", "M1");
+    		List<String> derChrList2 = Arrays.asList(derChr0, derChr1);
+    		for (int i = 0; i < 2; i++) {
+    			List<Integer> derChrLossMap = markSpecificLossGain.get(derMarkList2.get(i));
+    			int derchrOffset = chrsOffset[getChrBlockIndex(derChrList2.get(i))];
+    			for (int j = 0; j < derChrLossMap.size(); j++) {
+    				if (derChrLossMap.get(j) == 0) {
+    					karyotypeGainOutcome.set(derchrOffset + j, karyotypeGainOutcome.get(derchrOffset + j) + 1);
+    				}
+    			}
+    		}
+    		for (String mark: commonMarkSet) {
+    			if (mark.equals("M0") || mark.equals("M1")) continue;
+    			String chr = markToChrMap.get(mark);
+    			List<Integer> chrInDer = markSpecificLossGain.get(mark);
+    			int chrOffset = chrsOffset[getChrBlockIndex(chr)];
+    			for (int i = 0; i < chrInDer.size(); i++) {
+    				if (chrInDer.get(i) > 0) {
+    					karyotypeGainOutcome.set(chrOffset + i, karyotypeGainOutcome.get(chrOffset + i) + chrInDer.get(i));
+    				}
+    			}
+    		}
+    		for (String mark: homologousMarkSet) {
+    			String chr = markToChrMap.get(mark);
+    			List<Integer> chrInDer = markSpecificLossGain.get(mark);
+    			int chrOffset = chrsOffset[getChrBlockIndex(chr)];
+    			for (int i = 0; i < chrInDer.size(); i++) {
+    				if (chrInDer.get(i) > 0) {
+    					karyotypeGainOutcome.set(chrOffset + i, karyotypeGainOutcome.get(chrOffset + i) + chrInDer.get(i));
+    				}
+    			}
+    		}
+    		derKaryotypeLGF.add(karyotypeLossOutcome);
+    		derKaryotypeLGF.add(karyotypeGainOutcome);
+    		derKaryotypeLGF.add(karyotypeFusionOutcome);
+    		return derKaryotypeLGF;
+    	}
+
         List<String> derMarkList = Arrays.asList("M0", "M1");
         List<String> derChrList = Arrays.asList(derChr0, derChr1);
         List<List<List<String>>> derChrGainedSegmentsList = Arrays.asList(derChr0GainedSegments, derChr1GainedSegments);

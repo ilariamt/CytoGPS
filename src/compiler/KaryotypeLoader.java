@@ -275,9 +275,9 @@ public class KaryotypeLoader extends KaryotypeBaseListener {
 				derUncertainty = true;
 			}
 			if (ctx.prefix().PLUS() != null) {
-				for (String chr : d.getChrList()) {
-					d.getGainChrs().add(chr);
-				}
+				// + before a der means one extra copy of the der on top of the baseline.
+				// All bands retained in the der are gains; nothing is lost.
+				d.setExtraCopy(true);
 			}
 			if (ctx.prefix().MINUS() != null) {
 				String searchedS = ctx.derId().getText() + ctx.derChrList().getText();

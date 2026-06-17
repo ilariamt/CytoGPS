@@ -905,7 +905,35 @@ public class Validator {
 				}
 				break;
 			}
-			default: isValid = false; // This is important, as "r" "tas" "idic" "i" "dic" "trc" cannot appear in derivative chromosomes, except "r" could appear inside der when der's chrList has only one chr.
+			case "i": {
+				if (chrList.size() != 1) {
+					isValid = false;
+				} else if (!isValidChr(chrList.get(0))) {
+					isValid = false;
+				} else if (breakpoints.get(0).size() != 1) {
+					isValid = false;
+				} else if (!isValidChrBreakpoint(breakpointsFullName.get(0).get(0))) {
+					isValid = false;
+				} else {
+					isValid = true;
+				}
+				break;
+			}
+			case "dic": {
+				if (chrList.size() != 2) {
+					isValid = false;
+				} else if (!isValidChr(chrList.get(0)) || !isValidChr(chrList.get(1))) {
+					isValid = false;
+				} else if (breakpoints.get(0).size() != 1 || breakpoints.get(1).size() != 1) {
+					isValid = false;
+				} else if (!isValidChrBreakpointList(breakpointsFullName)) {
+					isValid = false;
+				} else {
+					isValid = true;
+				}
+				break;
+			}
+			default: isValid = false; // "tas" "idic" "trc" cannot appear in derivative chromosomes, except "r" could appear inside der when der's chrList has only one chr.
 		}
 		return isValid;
 	}

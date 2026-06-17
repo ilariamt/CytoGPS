@@ -1675,13 +1675,49 @@ public class ValidationError {
 				}
 				return validationMessageList;				
 			}
+			case "i": {
+				if (chrList.size() != 1) {
+					validationMessageList.add(errorHead + "the cytogenetic \"i\" subevent can happen on a single chromosome, but there are " + chrList.size() + " chromosomes");
+				} else if (!isValidChr(chrList.get(0))) {
+					validationMessageList.add(errorHead + "\"" + chrList.get(0) + "\" is not a valid chromosome");
+				} else if (breakpoints.get(0).size() != 1) {
+					validationMessageList.add(errorHead + "the cytogenetic \"i\" subevent must involve one breakpoint, but there are " + breakpoints.get(0).size() + " breakpoints");
+				} else if (!isValidChrBreakpoint(breakpointsFullName.get(0).get(0))) {
+					validationMessageList.add(errorHead + "\"" + breakpointsFullName.get(0).get(0) + "\" is not a valid chromosome breakpoint");
+				} else {
+				}
+				return validationMessageList;
+			}
+			case "dic": {
+				if (chrList.size() != 2) {
+					validationMessageList.add(errorHead + "the cytogenetic \"dic\" subevent must involve two chromosomes, but there are " + chrList.size() + " chromosomes");
+				} else if (!isValidChr(chrList.get(0)) || !isValidChr(chrList.get(1))) {
+					for (int ii = 0; ii < chrList.size(); ii++) {
+						if (!isValidChr(chrList.get(ii))) {
+							validationMessageList.add(errorHead + "\"" + chrList.get(ii) + "\" is not a valid chromosome");
+						}
+					}
+				} else if (breakpoints.get(0).size() != 1 || breakpoints.get(1).size() != 1) {
+					validationMessageList.add(errorHead + "the cytogenetic \"dic\" subevent must involve one breakpoint for each chromosome");
+				} else if (!isValidChrBreakpointList(breakpointsFullName)) {
+					for (List<String> chrBreakpoints: breakpointsFullName) {
+						for (String chrBreakpoint: chrBreakpoints) {
+							if (!isValidChrBreakpoint(chrBreakpoint)) {
+								validationMessageList.add(errorHead + "\"" + chrBreakpoint + "\" is not a valid chromosome breakpoint");
+							}
+						}
+					}
+				} else {
+				}
+				return validationMessageList;
+			}
 			default: {
 				validationMessageList.add(errorHead + "\"" + e.getNature() + "\" is not an allowed cytogenetic subevent");
 				return validationMessageList;
 			}
 		}
 	}
-	
+
 	private static String flipBreakpoints(String eventCode) {
 		String breakpointsString = getBreakpointsString(eventCode);
 		List<String> breakpointList = getAllBreakpointsFromBreakpointsString(breakpointsString);

@@ -106,6 +106,20 @@ public class IderValidation extends DerivativeValidation {
 						}
 						break;
 					}
+					case "i": {
+						if (!isValidI(breakpointsFullName, derChr, eventIndexList, i)) {
+							validDerivativeChr = false;
+							break outer;
+						}
+						break;
+					}
+					case "dic": {
+						if (!isValidDic(breakpointsFullName, subevent.getChrList(), derChr, eventIndexList, i)) {
+							validDerivativeChr = false;
+							break outer;
+						}
+						break;
+					}
 				}
 			}
 		}		

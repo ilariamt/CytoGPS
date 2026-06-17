@@ -46,18 +46,14 @@ public class KaryotypeRunner {
 		// Multi-clone karyotypes MUST go through ANTLR to parse clone structure
 		boolean isMultiClone = inputNoSpace.contains("]/") || inputNoSpace.matches(".*\\]\\s*/\\s*\\d+.*");
 
-		// NEW: Check if detailed formula exists in the input
+		// Check if detailed formula exists in the input
+		// All detailed formulas (single-clone, multi-clone, mixed, pure) go through
+		// standard ANTLR parsing — the grammar supports :: and -> notation natively.
+		// Pure detailed-only formulas (no standard events) use DetailedFormulaParser
+		// as a fallback since ANTLR may not handle them without a chromosome count.
 		if (DetailedFormulaParser.isDetailedFormula(inputNoSpace)) {
-			// For non-multi-clone inputs with detailed formulas, use parseMixedFormat
-			// Multi-clone inputs should go through standard ANTLR parsing directly
-			if (isMultiClone) {
-				// Multi-clone with detailed formulas: try standard ANTLR first
-				// If that fails, fall through to handle it
-			} else if (isMixedFormat(inputNoSpace)) {
-				// Single-clone mixed format: parse both standard and detailed events
-				return parseMixedFormat(inputNoSpace, finalResult);
-			} else {
-				// Pure detailed formula (single-clone): route to detailed formula parser only
+			if (!isMixedFormat(inputNoSpace)) {
+				// Pure detailed formula (no standard events): route to detailed parser only
 				DetailedFormulaParser detailedParser = new DetailedFormulaParser();
 				BiologicalOutcome b = detailedParser.parseDetailedFormula(inputNoSpace);
 
@@ -65,9 +61,7 @@ public class KaryotypeRunner {
 				finalResult.getBiologicalInterpretationList().add(
 					BiologicalOutcome.getBiologicalInterpretation(b)
 				);
-				
-				// Set clone information for JSON output
-				// For pure detailed formulas, create a single clone with the full karyotype code
+
 				List<Clone> singleClone = new java.util.ArrayList<>();
 				Clone clone = new Clone();
 				clone.setCloneCode(inputNoSpace);
@@ -75,9 +69,10 @@ public class KaryotypeRunner {
 				finalResult.setCloneCodeList(finalResult.getCloneCodeList(singleClone));
 				finalResult.setCellNumList(finalResult.getCellNumList(singleClone));
 				finalResult.setRelationshipList(finalResult.getRelationshipList(singleClone));
-				
+
 				return finalResult;
 			}
+			// Mixed format (standard + detailed): fall through to ANTLR parsing below
 		}
 
 		// Preprocess to handle '?' symbols
@@ -106,7 +101,13 @@ public class KaryotypeRunner {
 				finalResult.setContainingValidationError(true);
 				finalResult.setValidationMessage(multiCloneErrorMsgList);
 			} else {
-				List<Clone> rowClones = loader.getRowClones();	
+				List<Clone> rowClones = loader.getRowClones();
+				if (rowClones.isEmpty()) {
+					finalResult.setContainingValidationError(true);
+					java.util.List<String> msgs = new java.util.ArrayList<>();
+					msgs.add("Parsing produced no clone objects for karyotype: " + inputNoSpace);
+					finalResult.setValidationMessage(msgs);
+				} else {
 				finalResult.setCloneCodeList(finalResult.getCloneCodeList(rowClones));
 				new ParseEvent().processMissingBreakpoints(rowClones);
 				if (Validator.isValidRowClones(rowClones)) {
@@ -121,8 +122,9 @@ public class KaryotypeRunner {
 					finalResult.setContainingValidationError(true);
 					finalResult.setValidationMessage(ValidationError.getRowClonesError(rowClones));
 				}
-			}		
-			
+				}
+			}
+
 		} catch (ParseCancellationException ex) {
 			// Check if this is multi-clone with detailed formulas (failed ANTLR parsing)
 			if (isMultiClone && DetailedFormulaParser.isDetailedFormula(inputNoSpace)) {
@@ -172,6 +174,17 @@ public class KaryotypeRunner {
 			
 		}
 		
+		// Final safety net: if no error was flagged but outcomes are empty,
+		// report as validation error — never return Success with empty results
+		if (!finalResult.isContainingValidationError()
+				&& !finalResult.isContainingLexerParserError()
+				&& finalResult.getBiologicalOutcomeList().isEmpty()) {
+			finalResult.setContainingValidationError(true);
+			java.util.List<String> msgs = new java.util.ArrayList<>();
+			msgs.add("Parsing produced no biological outcomes for karyotype: " + input.replaceAll("\\s",""));
+			finalResult.setValidationMessage(msgs);
+		}
+
 		return finalResult;
 	}
 
@@ -306,13 +319,23 @@ public class KaryotypeRunner {
 		// Step 4: Merge LGF results
 		BiologicalOutcome mergedOutcome = mergeBiologicalOutcomes(standardOutcome, detailedOutcome);
 
+		// If standard parsing failed (rowClones empty), the LGF vectors from the
+		// partial parse may be incomplete/incorrect — report as validation error
+		// rather than risk writing a wrong parsing_result
+		if (rowClones.isEmpty()) {
+			finalResult.setContainingValidationError(true);
+			java.util.List<String> msgs = new java.util.ArrayList<>();
+			msgs.add("Mixed-format karyotype could not be fully parsed: standard ISCN events failed to parse after removing detailed formula(s). Input: " + input);
+			finalResult.setValidationMessage(msgs);
+			return finalResult;
+		}
+
 		if (mergedOutcome != null) {
 			finalResult.getBiologicalOutcomeList().add(mergedOutcome);
 			finalResult.getBiologicalInterpretationList().add(
 				BiologicalOutcome.getBiologicalInterpretation(mergedOutcome)
 			);
-			
-			// Set clone information for JSON output (needed by AggregateJsonForBatchFile)
+
 			finalResult.setCloneCodeList(finalResult.getCloneCodeList(rowClones));
 			finalResult.setCellNumList(finalResult.getCellNumList(rowClones));
 			finalResult.setRelationshipList(finalResult.getRelationshipList(rowClones));
@@ -474,18 +497,38 @@ public class KaryotypeRunner {
 				
 				// Parse individual clone using standard getFinalResult logic
 				FinalResult cloneResult = getFinalResult(clonePart);
-				
-				// Collect results from this clone
-				if (!cloneResult.getBiologicalOutcomeList().isEmpty()) {
-					for (BiologicalOutcome outcome : cloneResult.getBiologicalOutcomeList()) {
-						allOutcomes.add(outcome);
-						allCodes.add(clonePart);
-						allCellNums.add(cellCount);
-						allRelationships.add("");
+
+				// If ANY clone fails, the whole karyotype is an error
+				if (cloneResult.isContainingValidationError() || cloneResult.isContainingLexerParserError()
+						|| cloneResult.getBiologicalOutcomeList().isEmpty()) {
+					finalResult.setContainingValidationError(true);
+					java.util.List<String> msgs = new java.util.ArrayList<>();
+					msgs.add("Clone " + (i + 1) + " of multi-clone karyotype failed to parse: " + clonePart);
+					if (cloneResult.getValidationMessage() != null && !cloneResult.getValidationMessage().isEmpty()) {
+						msgs.addAll(cloneResult.getValidationMessage());
 					}
+					finalResult.setValidationMessage(msgs);
+					return finalResult;
+				}
+
+				// Collect results from this clone
+				for (BiologicalOutcome outcome : cloneResult.getBiologicalOutcomeList()) {
+					allOutcomes.add(outcome);
+					allCodes.add(clonePart);
+					allCellNums.add(cellCount);
+					allRelationships.add("");
 				}
 			}
 			
+			// If no outcomes were produced, report as validation error
+			if (allOutcomes.isEmpty()) {
+				finalResult.setContainingValidationError(true);
+				java.util.List<String> msgs = new java.util.ArrayList<>();
+				msgs.add("Multi-clone karyotype with detailed formulas produced no biological outcomes: " + input);
+				finalResult.setValidationMessage(msgs);
+				return finalResult;
+			}
+
 			// Add all collected outcomes to final result
 			for (BiologicalOutcome outcome : allOutcomes) {
 				finalResult.getBiologicalOutcomeList().add(outcome);
@@ -493,11 +536,11 @@ public class KaryotypeRunner {
 					BiologicalOutcome.getBiologicalInterpretation(outcome)
 				);
 			}
-			
+
 			finalResult.setCloneCodeList(allCodes);
 			finalResult.setCellNumList(allCellNums);
 			finalResult.setRelationshipList(allRelationships);
-			
+
 			return finalResult;
 		} catch (Exception e) {
 			// If multi-clone parsing fails, set error

@@ -58,8 +58,11 @@ public class DerivativeValidation {
 	protected Map<String, List<String>> insertedPlaceListMap = new HashMap<>();
 	protected Map<String, List<String>> hsrPlaceListMap = new HashMap<>();
 	
+	protected boolean isExtraCopy = false;
+
 	public DerivativeValidation() {}
 	public DerivativeValidation(DerEvent e) {
+		this.isExtraCopy = e.isExtraCopy();
 		this.derChr = e.getChrList().get(0);
 		rawStringList.add(derChr + "pterM0");
 		rawStringList.add(derChr + "qterM0");
@@ -106,6 +109,10 @@ public class DerivativeValidation {
 			Event subevent = subevents.get(i);
 			if (!subevent.isUncertainEvent()) {
 				List<List<String>> breakpointsFullName = subevent.getBreakpointsFullName(subevent.getChrList(), subevent.getBreakpoints());
+				if (breakpointsFullName == null) {
+					validDerivativeChr = false;
+					break outer;
+				}
 				switch (subevent.getNature()) {
 					case "add": {
 						if (!isValidAdd(breakpointsFullName, derChr, eventIndexList, i)) {
@@ -177,6 +184,20 @@ public class DerivativeValidation {
 						}
 						break;
 					}
+					case "i": {
+						if (!isValidI(breakpointsFullName, derChr, eventIndexList, i)) {
+							validDerivativeChr = false;
+							break outer;
+						}
+						break;
+					}
+					case "dic": {
+						if (!isValidDic(breakpointsFullName, subevent.getChrList(), derChr, eventIndexList, i)) {
+							validDerivativeChr = false;
+							break outer;
+						}
+						break;
+					}
 				}
 			}
 		}
@@ -186,7 +207,7 @@ public class DerivativeValidation {
 			return new DerivativeValidationOutcome(validDerivativeChr, segments, null, null);
 		}
 	}
-	
+
 	public DerivativeValidationOutcome getDerivativeValidationOutcomeWithoutR() {
 		boolean validDerivativeChr = true;
 		List<String> derChrList = Arrays.asList(derChr);
@@ -198,6 +219,10 @@ public class DerivativeValidation {
 			Event subevent = subevents.get(i);
 			if (!subevent.isUncertainEvent()) {
 				List<List<String>> breakpointsFullName = subevent.getBreakpointsFullName(subevent.getChrList(), subevent.getBreakpoints());
+				if (breakpointsFullName == null) {
+					validDerivativeChr = false;
+					break outer;
+				}
 				switch (subevent.getNature()) {
 					case "add": {
 						if (!isValidAdd(breakpointsFullName, derChr, eventIndexList, i)) {
@@ -298,6 +323,28 @@ public class DerivativeValidation {
 						}
 						break;
 					}
+					case "i": {
+						if (!isValidI(breakpointsFullName, derChr, eventIndexList, i)) {
+							if (i < firstPrimaryTEventIndex) {
+								reverseOrder = true;
+								reverseOrderEnd = i;
+							}
+							validDerivativeChr = false;
+							break outer;
+						}
+						break;
+					}
+					case "dic": {
+						if (!isValidDic(breakpointsFullName, subevent.getChrList(), derChr, eventIndexList, i)) {
+							if (i < firstPrimaryTEventIndex) {
+								reverseOrder = true;
+								reverseOrderEnd = i;
+							}
+							validDerivativeChr = false;
+							break outer;
+						}
+						break;
+					}
 				}
 			}
 		}
@@ -343,6 +390,10 @@ public class DerivativeValidation {
 				Event subevent = subevents.get(correctParsingOrder.get(i));
 				if (!subevent.isUncertainEvent()) {
 					List<List<String>> breakpointsFullName = subevent.getBreakpointsFullName(subevent.getChrList(), subevent.getBreakpoints());
+					if (breakpointsFullName == null) {
+						validDerivativeChr = false;
+						break outer2;
+					}
 					switch (subevent.getNature()) {
 						case "add": {							
 							if (!isValidAdd(breakpointsFullName, derChr, correctParsingOrder, i)) {							
@@ -407,10 +458,24 @@ public class DerivativeValidation {
 							}
 							break;
 						}
+						case "i": {
+							if (!isValidI(breakpointsFullName, derChr, correctParsingOrder, i)) {
+								validDerivativeChr = false;
+								break outer2;
+							}
+							break;
+						}
+						case "dic": {
+							if (!isValidDic(breakpointsFullName, subevent.getChrList(), derChr, correctParsingOrder, i)) {
+								validDerivativeChr = false;
+								break outer2;
+							}
+							break;
+						}
 					}
 				}
-			}    		   		
-		} 
+			}
+		}
 		
 		if (validDerivativeChr) {
 			return new DerivativeValidationOutcome(validDerivativeChr, segments, getDetailedSystem(), getDerKaryotypeLGF());
@@ -2772,6 +2837,163 @@ public class DerivativeValidation {
     	return true;
     }
     
+    /**
+     * Validate isochromosome (i) as a sub-event inside a derivative chromosome.
+     * An isochromosome duplicates one arm and loses the other.
+     * The breakpoint must be at the centromere (p10 or q10) of a chromosome
+     * that is part of the derivative.
+     */
+    protected boolean isValidI(List<List<String>> breakpointsFullName, String derChr, List<Integer> correctParsingOrder, int currentParsingPlace) {
+    	String chrBreakpoint = breakpointsFullName.get(0).get(0);
+    	String chr = getChr(chrBreakpoint);
+    	String mark;
+    	if (chr.equals(derChr)) {
+    		mark = "M0";
+    	} else {
+    		if (currentParsingPlace == 0) {
+    			return false;
+    		}
+    		Event previousEvent = subevents.get(correctParsingOrder.get(currentParsingPlace - 1));
+    		int chrIndex = previousEvent.getChrList().indexOf(chr);
+    		if (chrIndex == -1) {
+    			return false;
+    		}
+    		mark = parsingOrderMarksMap.get(currentParsingPlace - 1).get(chrIndex);
+    		if (mark == null || !mark.startsWith("M")) {
+    			return false;
+    		}
+    	}
+    	// The breakpoint should be at a centromere (p10 or q10)
+    	if (!chrBreakpoint.endsWith("10")) {
+    		return false;
+    	}
+    	// Determine which arm is kept (the arm specified) and which is lost (the opposite arm)
+    	String keptArm = getChrArm(chrBreakpoint);
+    	String lostArm = getOppositeChrArm(keptArm);
+    	// Record loss of the opposite arm
+    	List<List<String>> deletedSegments = new ArrayList<>();
+    	deletedSegments.add(Arrays.asList(lostArm + "terM0", lostArm + "10M0"));
+    	recordLoss(deletedSegments, derChrGainedSegments);
+    	// Record gain of the kept arm (duplication/mirror)
+    	List<Integer> segmentNumsOfMark = getSegmentNumList(mark);
+    	for (int segNum: segmentNumsOfMark) {
+    		List<String> segment = segments.get(segNum);
+    		if (segment.size() > 1) {
+    			String segChr = getChr(segment.get(0));
+    			if (segChr.equals(chr)) {
+    				String segArm = getChrArm(segment.get(0));
+    				if (segArm.equals(keptArm)) {
+    					List<String> gainedSegment = Arrays.asList(segment.get(0), segment.get(1));
+    					recordGain(gainedSegment, mark);
+    				}
+    			}
+    		}
+    	}
+    	// Record fusion at centromere
+    	// Record ParsingOrder_Marks map
+    	parsingOrderMarksMap.put(currentParsingPlace, Arrays.asList(mark));
+    	segments = getSegments(rawStringList);
+    	return true;
+    }
+
+    /**
+     * Validate dicentric chromosome (dic) as a sub-event inside a derivative chromosome.
+     * A dicentric involves fusion of two chromosomes, similar to translocation but
+     * resulting in a chromosome with two centromeres.
+     */
+    protected boolean isValidDic(List<List<String>> breakpointsFullName, List<String> chrList, String derChr, List<Integer> correctParsingOrder, int currentParsingPlace) {
+    	// dic has two chromosomes and one breakpoint per chromosome
+    	String chrBreakpoint0 = breakpointsFullName.get(0).get(0);
+    	String chrBreakpoint1 = breakpointsFullName.get(1).get(0);
+    	String chr0 = getChr(chrBreakpoint0);
+    	String chr1 = getChr(chrBreakpoint1);
+    	// Treat similarly to translocation: one chr provides the deletion site, the other is inserted
+    	String markDeletion, markInsertion;
+    	String chrBreakpointDeletion, chrBreakpointInsertion;
+    	if (chr0.equals(derChr)) {
+    		markDeletion = "M0";
+    		chrBreakpointDeletion = chrBreakpoint0;
+    		chrBreakpointInsertion = chrBreakpoint1;
+    	} else if (chr1.equals(derChr)) {
+    		markDeletion = "M0";
+    		chrBreakpointDeletion = chrBreakpoint1;
+    		chrBreakpointInsertion = chrBreakpoint0;
+    	} else {
+    		if (currentParsingPlace == 0) {
+    			return false;
+    		}
+    		Event previousEvent = subevents.get(correctParsingOrder.get(currentParsingPlace - 1));
+    		List<String> previousChrList = previousEvent.getChrList();
+    		if (previousChrList.contains(chr0)) {
+    			int chrIndex = previousChrList.indexOf(chr0);
+    			markDeletion = parsingOrderMarksMap.get(currentParsingPlace - 1).get(chrIndex);
+    			if (markDeletion == null || !markDeletion.startsWith("M")) {
+    				return false;
+    			}
+    			chrBreakpointDeletion = chrBreakpoint0;
+    			chrBreakpointInsertion = chrBreakpoint1;
+    		} else if (previousChrList.contains(chr1)) {
+    			int chrIndex = previousChrList.indexOf(chr1);
+    			markDeletion = parsingOrderMarksMap.get(currentParsingPlace - 1).get(chrIndex);
+    			if (markDeletion == null || !markDeletion.startsWith("M")) {
+    				return false;
+    			}
+    			chrBreakpointDeletion = chrBreakpoint1;
+    			chrBreakpointInsertion = chrBreakpoint0;
+    		} else {
+    			return false;
+    		}
+    	}
+    	// Validate deletion breakpoint
+    	List<List<String>> segmentsOfChrDeletion = getSegmentsOfChr(markDeletion);
+    	List<Integer> segmentNumsOfMarkDeletion = getSegmentNumList(markDeletion);
+    	if (isInMultipleSegments(chrBreakpointDeletion, segmentsOfChrDeletion)) {
+    		return false;
+    	}
+    	int segmentNumDeletion = findSegment(chrBreakpointDeletion, segmentNumsOfMarkDeletion);
+    	if (segmentNumDeletion == -1) {
+    		return false;
+    	} else {
+    		List<String> segment = segments.get(segmentNumDeletion);
+    		if (isStrictlyFinerThanExistingSegmentEndPoint(chrBreakpointDeletion, segment) || isStrictlyCoarserThanExistingSegmentEndPoint(chrBreakpointDeletion, segment)) {
+    			return false;
+    		}
+    	}
+    	// Create a new mark for the inserted chromosome
+    	if (!chr0.equals(chr1)) {
+    		markInsertion = getNextCommonMark();
+    		commonMarkSet.add(markInsertion);
+    	} else {
+    		markInsertion = getNextHomologousMark();
+    		homologousMarkSet.add(markInsertion);
+    	}
+    	String chrInsertion = getChr(chrBreakpointInsertion);
+    	markToChrMap.put(markInsertion, chrInsertion);
+    	markSpecificLossGain.put(markInsertion, initializeChrLossGain(chrInsertion));
+    	// Perform translocation
+    	List<List<String>> deletedSegments = new ArrayList<>();
+    	translocate(chrBreakpointDeletion, segmentNumDeletion, markDeletion, segmentNumsOfMarkDeletion, chrBreakpointInsertion, markInsertion, deletedSegments);
+    	// Record Loss and Gain
+    	recordLoss(deletedSegments, derChrGainedSegments);
+    	List<String> gainedSegment = Arrays.asList(getChrArm(chrBreakpointInsertion) + "ter" + markInsertion, chrBreakpointInsertion + markInsertion);
+    	recordGain(gainedSegment, markInsertion);
+    	// Record ParsingOrder_Marks map
+    	if (!chr0.equals(chr1)) {
+    		if (chr0.equals(derChr)) {
+    			parsingOrderMarksMap.put(currentParsingPlace, Arrays.asList(markDeletion, markInsertion));
+    		} else if (chr1.equals(derChr)) {
+    			parsingOrderMarksMap.put(currentParsingPlace, Arrays.asList(markInsertion, markDeletion));
+    		} else if (chrBreakpointDeletion == chrBreakpoint0) {
+    			parsingOrderMarksMap.put(currentParsingPlace, Arrays.asList(markDeletion, markInsertion));
+    		} else {
+    			parsingOrderMarksMap.put(currentParsingPlace, Arrays.asList(markInsertion, markDeletion));
+    		}
+    	} else {
+    		parsingOrderMarksMap.put(currentParsingPlace, Arrays.asList(markDeletion, markInsertion));
+    	}
+    	return true;
+    }
+
     // Get the RHS segment # of the interface
     protected int getHsrSegmentNum(List<String> hsrInterface) {
     	List<Integer> segmentNumList = new ArrayList<>();
@@ -3344,7 +3566,46 @@ public class DerivativeValidation {
     public List<List<Integer>> getDerKaryotypeLGF() {
     	List<List<Integer>> derKaryotypeLGF = new ArrayList<>();
     	int[] chrsOffset = getChrsOffset(chrArmArrays);
-    	
+
+    	if (isExtraCopy) {
+    		// +der: add gains only. The retained portion of derChr is everything NOT in
+    		// markSpecificLossGain["M0"] (which tracks what was given away). Donor segments
+    		// taken into the der are in markSpecificLossGain for non-M0 marks.
+    		// No loss is written here — losses from other events are unaffected.
+    		int derchrOffset = chrsOffset[getChrBlockIndex(derChr)];
+    		List<Integer> derChrLossMap = markSpecificLossGain.get("M0");
+    		for (int i = 0; i < derChrLossMap.size(); i++) {
+    			if (derChrLossMap.get(i) == 0) {
+    				karyotypeGainOutcome.set(derchrOffset + i, karyotypeGainOutcome.get(derchrOffset + i) + 1);
+    			}
+    		}
+    		for (String mark: commonMarkSet) {
+    			if (mark.equals("M0")) continue;
+    			String chr = markToChrMap.get(mark);
+    			List<Integer> chrInDer = markSpecificLossGain.get(mark);
+    			int chrOffset = chrsOffset[getChrBlockIndex(chr)];
+    			for (int i = 0; i < chrInDer.size(); i++) {
+    				if (chrInDer.get(i) > 0) {
+    					karyotypeGainOutcome.set(chrOffset + i, karyotypeGainOutcome.get(chrOffset + i) + chrInDer.get(i));
+    				}
+    			}
+    		}
+    		for (String mark: homologousMarkSet) {
+    			String chr = markToChrMap.get(mark);
+    			List<Integer> chrInDer = markSpecificLossGain.get(mark);
+    			int chrOffset = chrsOffset[getChrBlockIndex(chr)];
+    			for (int i = 0; i < chrInDer.size(); i++) {
+    				if (chrInDer.get(i) > 0) {
+    					karyotypeGainOutcome.set(chrOffset + i, karyotypeGainOutcome.get(chrOffset + i) + chrInDer.get(i));
+    				}
+    			}
+    		}
+    		derKaryotypeLGF.add(karyotypeLossOutcome);
+    		derKaryotypeLGF.add(karyotypeGainOutcome);
+    		derKaryotypeLGF.add(karyotypeFusionOutcome);
+    		return derKaryotypeLGF;
+    	}
+
     	List<Integer> derChrLoss = markSpecificLossGain.get("M0");
     	int derchrOffset = chrsOffset[getChrBlockIndex(derChr)];
     	for (int i = 0; i < derChrLoss.size(); i++) {

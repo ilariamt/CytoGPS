@@ -20,16 +20,21 @@ import java.util.*;
 	List<String> sexChrList = new ArrayList<>();
 }
 
+//describes a row (full karyo) as 2 possible types of sequences: rowTypeI (ISCN) and rowTypeII
 row: rowTypeI 
    | rowTypeII
    | (LETTER | .)+ {notifyErrorListeners("-1|This is an incorrect input for karyotype parsing.");}
    ;
+
+//describes the standard ISCN format regarding sequence of clones (rowTypeI)
 rowTypeI: firstClone (nonclonalClone | clone)* '.'? ;  
 firstClone 
 @init {i = i + 1;}
 @after {sexChrList = new ArrayList<>();}
 : ploidy? karyotypeI 
 ;
+
+//describes in rowTypeI the separation by '/'
 clone locals [String s = "", int l = 0]
 @init {i = i + 1;}
 @after {sexChrList = new ArrayList<>();}
@@ -100,6 +105,7 @@ nonclonalClone locals [String s = "", int l = 0]
   } 
 ;
 
+//describes rowTypeII and the stemlineclones
 rowTypeII: firstStemlineGroup otherStemlineGroup* additionalClone* '.'? ;
 firstStemlineGroup: stemlineClone sidelineCloneTypeI sidelineCloneTypeII* sidelineCloneTypeI* 
                   | stemlineClone sidelineCloneTypeI+ sidelineCloneTypeI sidelineCloneTypeII+ sidelineCloneTypeI*
@@ -251,6 +257,7 @@ additionalClone locals [String s = "", int l = 0]
   } 
 ;
 
+// describes the structure of a single clone
 /** I have seen a karyotype 46,t(X;18)(p11.1;q11.2),t(Y;1)(q11.2;p13) on p.50 of ISCN 2016.
  *  From Mitleman database, we have seen 46,t(X;14)(p22;q32) or t(Y;14)(p11;q32).
  *  We may need to allow gender to be missing? (Complicated, but will do.)
@@ -289,10 +296,11 @@ karyotypeI locals [int l = 0]
   }
 ; 
 
-karyotypeII locals [int l = 0] 
-: mosChi? chrNum modalNum? gender regularEvent* cellNum?
+karyotypeII locals [int l = 0]
+: mosChi? chrNum modalNum? gender idemSpecial regularEvent* cellNum?
+| mosChi? chrNum modalNum? gender regularEvent* cellNum?
 | mosChi? chrNum modalNum? idemSpecial regularEvent* cellNum?
-| mosChi? idemSpecial r=regularEvent* cellNum? 
+| mosChi? idemSpecial r=regularEvent* cellNum?
   {
 	if ($mosChi.text != null) {
 		$l = $l + $mosChi.text.length();
@@ -1120,6 +1128,7 @@ detailedSegmentList: COLON COLON? detailedSegment (COLON COLON detailedSegment)*
                    ;
 detailedSegment: detailedBreakpoint ARROW detailedBreakpoint
                | ('h' | 'H') ('s' | 'S') ('r' | 'R')  // HSR marker
+               | detailedBreakpoint                     // single breakpoint junction
                ;
 detailedBreakpoint: chr? arm ('t' | 'T') ('e' | 'E') ('r' | 'R')  // pter/qter
                   | chr? band subband?                             // normal band
@@ -1174,17 +1183,19 @@ numRangeTypeIII: (APPROX | MINUS) integer ;
 prefix: (PLUS | MINUS)? QUES | QUES? (PLUS | MINUS) ;
 prefixMinus: MINUS QUES? | QUES MINUS ; 
 prefixPlus: PLUS QUES? | QUES PLUS ;
-rId: ('a' | 'A') ('d' | 'D') ('d' | 'D') 
-   | ('d' | 'D') ('e' | 'E') ('l' | 'L') 
-   | ('d' | 'D') ('u' | 'U') ('p' | 'P') 
-   | ('t' | 'T') ('r' | 'R') ('p' | 'P') 
-   | ('q' | 'Q') ('d' | 'D') ('p' | 'P') 
-   | ('h' | 'H') ('s' | 'S') ('r' | 'R') 
-   | ('i' | 'I') ('n' | 'N') ('s' | 'S') 
-   | ('i' | 'I') ('n' | 'N') ('v' | 'V') 
-   | ('r' | 'R') 
+rId: ('a' | 'A') ('d' | 'D') ('d' | 'D')
+   | ('d' | 'D') ('e' | 'E') ('l' | 'L')
+   | ('d' | 'D') ('i' | 'I') ('c' | 'C')
+   | ('d' | 'D') ('u' | 'U') ('p' | 'P')
+   | ('t' | 'T') ('r' | 'R') ('p' | 'P')
+   | ('q' | 'Q') ('d' | 'D') ('p' | 'P')
+   | ('h' | 'H') ('s' | 'S') ('r' | 'R')
+   | ('i' | 'I') ('n' | 'N') ('s' | 'S')
+   | ('i' | 'I') ('n' | 'N') ('v' | 'V')
+   | ('i' | 'I')
+   | ('r' | 'R')
    | ('t' | 'T')
-   ; 
+   ;
 sex: 'x' | 'X' | 'y' | 'Y' ;
 sexChr: (sex | QUES)+ ;
 suffix: (c | inh)? multiplication | multiplication? (c | inh) ;

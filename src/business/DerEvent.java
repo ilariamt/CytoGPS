@@ -12,9 +12,10 @@ import java.util.List;
  * Date: August 30, 2021 
  */
 public class DerEvent extends Event {
-	
+
 	private List<Event> subevents;
-	
+	private boolean extraCopy = false;
+
 	public DerEvent() {
 		super();
 		subevents = new ArrayList<Event>();
@@ -26,6 +27,14 @@ public class DerEvent extends Event {
 
 	public void setSubevents(List<Event> subevents) {
 		this.subevents = subevents;
+	}
+
+	public boolean isExtraCopy() {
+		return extraCopy;
+	}
+
+	public void setExtraCopy(boolean extraCopy) {
+		this.extraCopy = extraCopy;
 	}
 
 }
