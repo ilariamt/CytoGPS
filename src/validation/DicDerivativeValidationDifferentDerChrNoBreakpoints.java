@@ -171,6 +171,13 @@ public class DicDerivativeValidationDifferentDerChrNoBreakpoints extends Derivat
 						}
 						break;
 					}
+					case "dic": {
+						if (!isValidT(breakpointsFullName, derChr0, derChr1, eventIndexList, i)) {
+							validDerivativeChr = false;
+							break outer;
+						}
+						break;
+					}
 				}
 			}
 		}
@@ -270,7 +277,14 @@ public class DicDerivativeValidationDifferentDerChrNoBreakpoints extends Derivat
 							break;
 						}
 						case "t": {
-							if (!isValidT(breakpointsFullName, derChr0, derChr1, correctParsingOrder, i)) {							
+							if (!isValidT(breakpointsFullName, derChr0, derChr1, correctParsingOrder, i)) {
+								validDerivativeChr = false;
+								break outer2;
+							}
+							break;
+						}
+						case "dic": {
+							if (!isValidT(breakpointsFullName, derChr0, derChr1, correctParsingOrder, i)) {
 								validDerivativeChr = false;
 								break outer2;
 							}
@@ -278,8 +292,8 @@ public class DicDerivativeValidationDifferentDerChrNoBreakpoints extends Derivat
 						}
 					}
 				}
-			} 
-        
+			}
+
         }
                
     	// Examine whether both centromeres of derChr0 and derChr1 are contained in the deatiled system

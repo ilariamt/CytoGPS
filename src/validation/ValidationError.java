@@ -167,16 +167,17 @@ public class ValidationError {
 		List<List<String>> breakpoints = e.getBreakpoints();
 		List<List<String>> breakpointsFullName = new ArrayList<>();
 		if (!(e instanceof DerEvent)) {
-			if (chrList.size() != breakpoints.size()) {
+			boolean isDetailedFormula = breakpoints.size() == 1 && !breakpoints.get(0).isEmpty() && breakpoints.get(0).get(0).startsWith("DETAILED:");
+			if (!isDetailedFormula && chrList.size() != breakpoints.size()) {
 				String errorMsg = errorHead + "The number of \";\" in its chromosome list is not equal to that in its breakpoints list";
 				String fixMsg = sizeFixMsg(e);
 				if (!fixMsg.isEmpty()) {
-					errorMsg += ", maybe you want to try \"" + fixMsg + "\""; 
+					errorMsg += ", maybe you want to try \"" + fixMsg + "\"";
 				}
 				validationMessageList.add(errorMsg);
 				return validationMessageList;
 			} else {
-				breakpointsFullName = e.getBreakpointsFullName(chrList, breakpoints); 
+				breakpointsFullName = e.getBreakpointsFullName(chrList, breakpoints);
 			}
 		} else {
     		breakpointsFullName = null;
@@ -925,13 +926,13 @@ public class ValidationError {
 				return validationMessageList;
 			}
 			case "ider": {
-				if (chrList.size() != 1 || breakpoints.size() != 1) {
+				if (chrList.size() != 1 || breakpoints.size() > 1) {
 					validationMessageList.add(errorHead + "the cytogenetic \"ider\" event can happen on a single chromosome, but there are " + chrList.size() + " chromosomes");
 				} else if (!isValidChr(chrList.get(0))) {
 					validationMessageList.add(errorHead + "\"" + chrList.get(0) + "\" is not a valid chromosome");
-				} else if (breakpoints.get(0).size() != 1) {
+				} else if (breakpoints.size() == 1 && breakpoints.get(0).size() != 1) {
 					validationMessageList.add(errorHead + "the cytogenetic \"ider\" event can involve only one breakpoint, but there are " + breakpoints.get(0).size() + " breakpoints");
-				} else if (!isValidCen(e.getBreakpointsFullName(chrList, breakpoints).get(0).get(0))) {
+				} else if (breakpoints.size() == 1 && !isValidCen(e.getBreakpointsFullName(chrList, breakpoints).get(0).get(0))) {
 					validationMessageList.add(errorHead + "the breakpoint of the cytogenetic \"i\" event must be a centromeric band, either p10 or q10, but \"" + e.getBreakpointsFullName(chrList, breakpoints).get(0).get(0) + "\" is not such one");
 //				} else if (((DerEvent)e).getSubevents().size() == 0) {
 //					validationMessageList.add(errorHead + "the cytogenetic \"ider\" event must have at least one structural rearrangement");

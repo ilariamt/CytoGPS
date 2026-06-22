@@ -3357,7 +3357,8 @@ public class DerivativeValidation {
     		int eventIndex = eventRemainingIndexList.get(i);
     		List<String> commonDerList = new ArrayList<>(subeventChrList.get(eventIndex));
     		boolean hasCommomDer = commonDerList.removeAll(derChrList); // true if commonDerList changed as a result of the call of removeAll(derChrList)    		
-    		if (subeventNatureList.get(eventIndex).equals("t") && hasCommomDer) {
+    		String nature = subeventNatureList.get(eventIndex);
+    		if ((nature.equals("t") || nature.equals("dic")) && hasCommomDer) {
     			firstPrimaryTEventIndex = eventIndex;
     			break;
     		}    		
